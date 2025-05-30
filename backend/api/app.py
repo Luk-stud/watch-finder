@@ -49,35 +49,56 @@ def initialize_search_engine():
     global beam_search_engine
     
     try:
-        # Check for embeddings files in order of preference
-        embeddings_complete_path = os.path.join(PROJECT_ROOT, "embeddings/watch_image_embeddings_v2_complete.pkl")
-        embeddings_v2_path = os.path.join(PROJECT_ROOT, "embeddings/watch_image_embeddings_v2.pkl")
-        embeddings_v1_path = os.path.join(PROJECT_ROOT, "embeddings/watch_image_embeddings.pkl")
+        # Check for embeddings files in deployment-ready locations
+        embeddings_path = os.path.join(os.path.dirname(__file__), '../data/watch_embeddings.pkl')
+        metadata_path = os.path.join(os.path.dirname(__file__), '../data/watch_metadata.pkl')
         
-        embeddings_path = None
-        if os.path.exists(embeddings_complete_path):
-            embeddings_path = embeddings_complete_path
-            print(f"Using complete v2 embeddings: {embeddings_complete_path}")
-        elif os.path.exists(embeddings_v2_path):
-            embeddings_path = embeddings_v2_path
-            print(f"Using v2 embeddings: {embeddings_v2_path}")
-        elif os.path.exists(embeddings_v1_path):
-            embeddings_path = embeddings_v1_path
-            print(f"Using v1 embeddings: {embeddings_v1_path}")
+        print(f"Looking for embeddings at: {embeddings_path}")
+        print(f"Looking for metadata at: {metadata_path}")
+        
+        if os.path.exists(embeddings_path) and os.path.exists(metadata_path):
+            print("✅ Found deployment-ready embeddings and metadata files")
+            # Load embeddings and metadata separately
+            with open(embeddings_path, 'rb') as f:
+                embeddings = pickle.load(f)
+            with open(metadata_path, 'rb') as f:
+                watch_data = pickle.load(f)
         else:
-            print("❌ No embeddings file found!")
-            print("Available files in embeddings directory:")
-            embeddings_dir = os.path.join(PROJECT_ROOT, "embeddings")
-            if os.path.exists(embeddings_dir):
-                for file in os.listdir(embeddings_dir):
-                    print(f"  - {file}")
+            # Fallback: try original locations for local development
+            embeddings_complete_path = os.path.join(PROJECT_ROOT, "embeddings/watch_image_embeddings_v2_complete.pkl")
+            embeddings_v2_path = os.path.join(PROJECT_ROOT, "embeddings/watch_image_embeddings_v2.pkl")
+            embeddings_v1_path = os.path.join(PROJECT_ROOT, "embeddings/watch_image_embeddings.pkl")
+            
+            embeddings_path = None
+            if os.path.exists(embeddings_complete_path):
+                embeddings_path = embeddings_complete_path
+                print(f"Using complete v2 embeddings: {embeddings_complete_path}")
+            elif os.path.exists(embeddings_v2_path):
+                embeddings_path = embeddings_v2_path
+                print(f"Using v2 embeddings: {embeddings_v2_path}")
+            elif os.path.exists(embeddings_v1_path):
+                embeddings_path = embeddings_v1_path
+                print(f"Using v1 embeddings: {embeddings_v1_path}")
             else:
-                print("  - embeddings directory doesn't exist")
-            print("Please run generate_clip_embeddings.py to create embeddings")
-            return False
-        
-        # Load precomputed embeddings directly
-        embeddings, watch_data = load_embeddings_directly(embeddings_path)
+                print("❌ No embeddings file found!")
+                print("Available files in backend/data directory:")
+                data_dir = os.path.join(os.path.dirname(__file__), '../data')
+                if os.path.exists(data_dir):
+                    for file in os.listdir(data_dir):
+                        print(f"  - {file}")
+                else:
+                    print("  - backend/data directory doesn't exist")
+                print("Available files in embeddings directory:")
+                embeddings_dir = os.path.join(PROJECT_ROOT, "embeddings")
+                if os.path.exists(embeddings_dir):
+                    for file in os.listdir(embeddings_dir):
+                        print(f"  - {file}")
+                else:
+                    print("  - embeddings directory doesn't exist")
+                return False
+            
+            # Load precomputed embeddings using original method
+            embeddings, watch_data = load_embeddings_directly(embeddings_path)
         
         # Initialize beam search engine
         print("Initializing beam search engine...")
