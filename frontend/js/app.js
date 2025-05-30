@@ -7,7 +7,7 @@
 const CONFIG = {
     API_BASE_URL: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
         ? 'http://localhost:5001/api' 
-        : 'https://your-backend-url.railway.app/api', // Update this after backend deployment
+        : 'https://web-production-a75cb.up.railway.app/api',
     SWIPE_THRESHOLD: 50,
     DRAG_THRESHOLD: 100,
     ANIMATION_DURATION: 300,
