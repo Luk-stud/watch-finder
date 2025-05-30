@@ -1,0 +1,56 @@
+[
+    {
+        "brand": "Rolex",
+        "model_name": "Submariner Date",
+        "price": "$8,950",
+        "image_url": "https://content.rolex.com/dam/2022/upright-bba-with-shadow/m126610ln-0001.png",
+        "product_url": "https://www.rolex.com/watches/submariner",
+        "description": "The Submariner's rotatable bezel is a key functionality of the watch. Its 60-minute graduations allow a diver to accurately and safely monitor diving time and decompression stops.",
+        "index": 0
+    },
+    {
+        "brand": "Omega",
+        "model_name": "Speedmaster Professional",
+        "price": "$6,400",
+        "image_url": "https://www.omegawatches.com/media/catalog/product/o/m/omega-speedmaster-moonwatch-professional-co-axial-master-chronometer-chronograph-42-mm-31030425001001-l.png",
+        "product_url": "https://www.omegawatches.com/watches/speedmaster",
+        "description": "The Omega Speedmaster Professional Chronograph is the first and only watch worn on the moon. Its design has remained largely unchanged since its introduction in 1957.",
+        "index": 1
+    },
+    {
+        "brand": "Seiko",
+        "model_name": "Prospex Diver",
+        "price": "$1,200",
+        "image_url": "https://www.seikowatches.com/us-en/-/media/Images/GlobalEn/Products/Prospex/SRPH57.png",
+        "product_url": "https://www.seikowatches.com/global-en/products/prospex",
+        "description": "Diving watch, automatic, stainless steel, blue dial",
+        "index": 2
+    },
+    {
+        "brand": "Cartier",
+        "model_name": "Tank Must",
+        "price": "$3,100",
+        "image_url": "https://www.cartier.com/variants/images/44733502651435078/img1/w400.jpg",
+        "product_url": "https://www.cartier.com/watches/tank",
+        "description": "Dress watch, rectangular case, leather strap, silver dial",
+        "index": 3
+    },
+    {
+        "brand": "Grand Seiko",
+        "model_name": "Snowflake",
+        "price": "$5,800",
+        "image_url": "https://www.grand-seiko.com/us-en/special/snowflake/img/img_main.png",
+        "product_url": "https://www.grand-seiko.com/us-en/collections/sbga211",
+        "description": "Spring drive, titanium, white textured dial, dress watch",
+        "index": 4
+    },
+    {
+        "brand": "Patek Philippe",
+        "model_name": "Calatrava",
+        "price": "$23,000",
+        "image_url": "https://www.patek.com/resources/img/face_white/large/5227G_001_1.png",
+        "product_url": "https://www.patek.com/en/collection/calatrava",
+        "description": "Classic dress watch, white gold case, mechanical movement, timeless design",
+        "index": 5
+    }
+] 

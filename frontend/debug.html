@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Watch Finder</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .loading { background-color: #cce5ff; color: #004085; }
+        button { padding: 10px 20px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Watch Finder Debug Page</h1>
+    
+    <div id="results"></div>
+    
+    <h2>Manual Tests:</h2>
+    <button onclick="testHealth()">Test Health Check</button>
+    <button onclick="testStartSession()">Test Start Session</button>
+    <button onclick="fullTest()">Run Full Test</button>
+    
+    <script>
+        const API_BASE_URL = 'http://localhost:5001/api';
+        
+        function log(message, type = 'info') {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            results.appendChild(div);
+            console.log(message);
+        }
+        
+        async function testHealth() {
+            log('Testing health check...', 'loading');
+            try {
+                const response = await fetch(`${API_BASE_URL}/health`);
+                const data = await response.json();
+                log(`Health check success: ${JSON.stringify(data)}`, 'success');
+                return true;
+            } catch (error) {
+                log(`Health check failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+        
+        async function testStartSession() {
+            log('Testing start session...', 'loading');
+            try {
+                const response = await fetch(`${API_BASE_URL}/start-session`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        num_seeds: 5
+                    })
+                });
+                const data = await response.json();
+                log(`Start session success: ${JSON.stringify(data)}`, 'success');
+                return data;
+            } catch (error) {
+                log(`Start session failed: ${error.message}`, 'error');
+                return null;
+            }
+        }
+        
+        async function fullTest() {
+            log('Starting full test sequence...', 'loading');
+            
+            // Test 1: Health check
+            const healthOk = await testHealth();
+            if (!healthOk) {
+                log('Health check failed, stopping tests', 'error');
+                return;
+            }
+            
+            // Test 2: Start session
+            const sessionData = await testStartSession();
+            if (!sessionData) {
+                log('Start session failed, stopping tests', 'error');
+                return;
+            }
+            
+            log('All tests passed! ✅', 'success');
+        }
+        
+        // Auto-run test on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            log('Debug page loaded, running automatic test...', 'loading');
+            setTimeout(fullTest, 1000); // Wait 1 second for backend to be ready
+        });
+    </script>
+</body>
+</html> 

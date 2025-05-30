@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="AI-powered watch discovery platform with visual similarity matching">
+    <title>Watch Finder - AI Powered Discovery</title>
+    
+    <!-- Preload critical resources -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="css/styles.css?v=2.0.0">
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="screen loading-screen" role="dialog" aria-labelledby="loading-title">
+        <div class="loading-content">
+            <div class="spinner" aria-hidden="true"></div>
+            <h2 id="loading-title">Initializing AI recommendations...</h2>
+        </div>
+    </div>
+
+    <!-- Welcome Screen -->
+    <div id="welcome-screen" class="screen welcome-screen hidden" role="main">
+        <div class="welcome-content">
+            <header class="welcome-header">
+                <h1><i class="fas fa-compass" aria-hidden="true"></i> Watch Finder</h1>
+                <p>Discover your perfect timepiece with AI-powered visual similarity</p>
+            </header>
+            <button class="btn btn-primary btn-start" onclick="startSession()" aria-label="Start discovering watches">
+                <i class="fas fa-play" aria-hidden="true"></i>
+                <span>Start Discovery</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="main-app" class="screen main-app hidden" role="main">
+        <!-- App Header -->
+        <header class="app-header">
+            <div class="app-branding">
+                <h1><i class="fas fa-compass" aria-hidden="true"></i> Watch Finder</h1>
+                <p>AI-powered discovery from 4,994 timepieces</p>
+            </div>
+            
+            <!-- Navigation -->
+            <nav class="main-nav" role="navigation" aria-label="Main navigation">
+                <button class="nav-btn active" onclick="showDiscover()" aria-label="Discover watches">
+                    <i class="fas fa-compass" aria-hidden="true"></i>
+                    <span>Discover</span>
+                </button>
+                <button class="nav-btn" onclick="showLiked()" aria-label="View liked watches">
+                    <i class="fas fa-heart" aria-hidden="true"></i>
+                    <span>Liked (<span id="liked-count">0</span>)</span>
+                </button>
+                <button class="nav-btn" onclick="showHistory()" aria-label="View watch history">
+                    <i class="fas fa-history" aria-hidden="true"></i>
+                    <span>History</span>
+                </button>
+            </nav>
+        </header>
+
+        <!-- Main Content -->
+        <main class="app-main">
+            <!-- Discovery View -->
+            <section id="discover-view" class="view discover-view active" role="tabpanel" aria-labelledby="discover-tab">
+                <div class="watch-container">
+                    <div id="watch-stack" class="watch-stack">
+                        <!-- Watch cards will be dynamically inserted here -->
+                    </div>
+                </div>
+                
+                <!-- Action Controls -->
+                <div class="action-controls" role="group" aria-label="Watch actions">
+                    <button class="action-btn action-btn--pass" onclick="passWatch()" aria-label="Pass on this watch">
+                        <i class="fas fa-times" aria-hidden="true"></i>
+                    </button>
+                    <button class="action-btn action-btn--like" onclick="likeWatch()" aria-label="Like this watch">
+                        <i class="fas fa-heart" aria-hidden="true"></i>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Liked Watches View -->
+            <section id="liked-view" class="view liked-view" role="tabpanel" aria-labelledby="liked-tab">
+                <div class="view-header">
+                    <h2><i class="fas fa-heart" aria-hidden="true"></i> Liked Watches</h2>
+                    <p>Your favorite timepieces discovered so far</p>
+                </div>
+                <div id="liked-grid" class="watch-grid" role="list">
+                    <!-- Liked watches will be populated here -->
+                </div>
+            </section>
+
+            <!-- History View -->
+            <section id="history-view" class="view history-view" role="tabpanel" aria-labelledby="history-tab">
+                <div class="view-header">
+                    <h2><i class="fas fa-history" aria-hidden="true"></i> Watch History</h2>
+                    <p>All watches you've reviewed in this session</p>
+                </div>
+                <div id="history-list" class="history-list" role="list">
+                    <!-- History will be populated here -->
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Error Screen -->
+    <div id="error-screen" class="screen error-screen hidden" role="alert">
+        <div class="error-content">
+            <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+            <h2>Something went wrong</h2>
+            <p id="error-message">Please try again</p>
+            <button class="btn btn-primary" onclick="location.reload()" aria-label="Retry loading the application">
+                <i class="fas fa-refresh" aria-hidden="true"></i>
+                <span>Retry</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Variants Modal -->
+    <div id="variants-modal" class="modal-overlay hidden" role="dialog" aria-labelledby="variants-title" aria-modal="true">
+        <div class="modal-content">
+            <header class="modal-header">
+                <h3 id="variants-title">Watch Variants</h3>
+                <button class="modal-close" onclick="closeVariantsModal()" aria-label="Close variants modal">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </header>
+            <div class="modal-body" id="variants-modal-body">
+                <!-- Variant content will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js?v=2.0.0"></script>
+</body>
+</html> 

@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Virtual environments
+.venv/
+watch_finder/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Model files (too large for deployment)
+*.pt
+*.pth
+best_clip_model_description_model.pt
+
+# Data files (use embeddings instead)
+watch_data/*.json
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+
+# Node modules (if any)
+node_modules/
+
+# Railway
+.railway/
+
+# Project specific
+embeddings/
+*.pkl
+*.pt 
