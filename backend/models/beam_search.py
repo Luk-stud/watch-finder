@@ -3,7 +3,6 @@ from typing import List, Dict, Any, Tuple
 import random
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.cluster import KMeans
-import faiss
 import time
 from datetime import datetime
 import sys
@@ -28,15 +27,9 @@ class WatchBeamSearch:
         self.beam_width = beam_width
         self.seen_watches = set()  # Track all watches shown to avoid repetition
         
-        # Initialize FAISS index for efficient similarity search
+        # Store embedding dimensions and normalize embeddings for cosine similarity
         self.dimension = embeddings.shape[1]
-        self.index = faiss.IndexFlatIP(self.dimension)  # Inner product (cosine similarity)
-        
-        # Normalize embeddings for cosine similarity
-        normalized_embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
-        self.index.add(normalized_embeddings.astype('float32'))
-        
-        self.normalized_embeddings = normalized_embeddings
+        self.normalized_embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
         
         # Enhanced feedback tracking
         self.feedback_history = []  # Store all feedback with timestamps
@@ -275,7 +268,7 @@ class WatchBeamSearch:
     
     def find_similar_watches(self, query_indices: List[int], k: int = 10) -> List[Tuple[int, float]]:
         """
-        Find watches similar to the given query indices using FAISS.
+        Find watches similar to the given query indices using numpy cosine similarity.
         
         Args:
             query_indices: List of watch indices to find neighbors for
@@ -289,18 +282,21 @@ class WatchBeamSearch:
         
         # Get average embedding of query watches
         query_embeddings = self.normalized_embeddings[query_indices]
-        avg_embedding = np.mean(query_embeddings, axis=0, keepdims=True)
+        avg_embedding = np.mean(query_embeddings, axis=0)
         
-        # Search for similar watches
-        similarities, indices = self.index.search(avg_embedding.astype('float32'), k + len(query_indices))
+        # Calculate cosine similarities with all watches
+        similarities = np.dot(self.normalized_embeddings, avg_embedding)
         
-        # Filter out the query watches themselves
+        # Get indices sorted by similarity (descending)
+        sorted_indices = np.argsort(similarities)[::-1]
+        
+        # Filter out the query watches themselves and return top k
         results = []
-        for i, (idx, sim) in enumerate(zip(indices[0], similarities[0])):
-            if idx not in query_indices:
-                results.append((int(idx), float(sim)))
+        for idx in sorted_indices:
+            if idx not in query_indices and len(results) < k:
+                results.append((int(idx), float(similarities[idx])))
         
-        return results[:k]
+        return results
     
     def beam_search_step(self, current_candidates: List[int], user_preferences: np.ndarray, step: int = 0) -> List[Dict[str, Any]]:
         """
