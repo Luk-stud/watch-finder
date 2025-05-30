@@ -60,9 +60,25 @@ def initialize_search_engine():
             print("✅ Found deployment-ready embeddings and metadata files")
             # Load embeddings and metadata separately
             with open(embeddings_path, 'rb') as f:
-                embeddings = pickle.load(f)
+                embeddings_data = pickle.load(f)
+                
+            # Handle different embeddings formats
+            if isinstance(embeddings_data, dict):
+                if 'embeddings' in embeddings_data:
+                    embeddings = embeddings_data['embeddings']
+                    print(f"Extracted embeddings from dictionary format")
+                else:
+                    # If it's a dict but no 'embeddings' key, assume it's the embeddings itself
+                    embeddings = embeddings_data
+                    print(f"Using dictionary as embeddings directly")
+            else:
+                embeddings = embeddings_data
+                print(f"Using raw embeddings data")
+                
             with open(metadata_path, 'rb') as f:
                 watch_data = pickle.load(f)
+                
+            print(f"Loaded {len(watch_data)} watches with {embeddings.shape[1]}D embeddings")
         else:
             # Fallback: try original locations for local development
             embeddings_complete_path = os.path.join(PROJECT_ROOT, "embeddings/watch_image_embeddings_v2_complete.pkl")
