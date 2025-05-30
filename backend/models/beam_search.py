@@ -112,7 +112,11 @@ class WatchBeamSearch:
                 
                 if best_watch is not None:
                     seeds.append(best_watch)
-                    print(f"Selected seed from cluster {cluster_id}: {self.watch_data[best_watch]['brand']} {self.watch_data[best_watch]['model_name']}")
+                    # Check bounds before accessing watch data
+                    if best_watch < len(self.watch_data):
+                        print(f"Selected seed from cluster {cluster_id}: {self.watch_data[best_watch]['brand']} {self.watch_data[best_watch]['model_name']}")
+                    else:
+                        print(f"Selected seed from cluster {cluster_id}: index {best_watch} (out of bounds)")
         
         # If we need more seeds, add diverse random ones
         while len(seeds) < num_seeds:
@@ -363,6 +367,7 @@ class WatchBeamSearch:
             for idx in sorted_indices:
                 if (idx not in current_candidates and 
                     idx not in self.seen_watches and 
+                    idx < len(self.watch_data) and  # Add bounds check
                     len(similar_watches) < self.beam_width * 3):
                     
                     # Base similarity score
@@ -496,8 +501,16 @@ class WatchBeamSearch:
         if not current_batch:
             return 0.1
         
+        # Check bounds to prevent index errors
+        if watch_idx >= len(self.watch_data):
+            return 0.0
+            
         watch_style = self._classify_watch_style(self.watch_data[watch_idx])
-        batch_styles = [self._classify_watch_style(self.watch_data[idx]) for idx in current_batch]
+        batch_styles = []
+        
+        for idx in current_batch:
+            if idx < len(self.watch_data):
+                batch_styles.append(self._classify_watch_style(self.watch_data[idx]))
         
         # Bonus if this style is not represented in current batch
         if watch_style not in batch_styles:
