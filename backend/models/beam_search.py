@@ -50,7 +50,7 @@ class WatchBeamSearch:
         
         # Initialize variant detection system
         print("Initializing variant detection system...")
-        self.variant_detector = WatchVariantDetector(watch_data, normalized_embeddings)
+        self.variant_detector = WatchVariantDetector(watch_data, self.normalized_embeddings)
         variant_stats = self.variant_detector.get_variant_stats()
         print(f"Variant detection: {variant_stats['variant_groups']} groups, {variant_stats['diversity_reduction']:.1f}% diversity improvement")
         
