@@ -48,5 +48,4 @@ node_modules/
 
 # Project specific
 embeddings/
-*.pkl
 *.pt 
