@@ -26,6 +26,7 @@ class WatchBeamSearch:
         self.watch_data = watch_data
         self.beam_width = beam_width
         self.seen_watches = set()  # Track all watches shown to avoid repetition
+        self.seen_series = set()  # Track seen series to avoid duplicates
         
         # Store embedding dimensions and normalize embeddings for cosine similarity
         self.dimension = embeddings.shape[1]
@@ -45,7 +46,8 @@ class WatchBeamSearch:
             'diversity_scores': [],
             'exploration_rates': [],
             'brand_coverage': set(),
-            'style_coverage': set()
+            'style_coverage': set(),
+            'user_satisfaction_indicators': []
         }
         
         # Initialize variant detection system
@@ -56,6 +58,18 @@ class WatchBeamSearch:
         
         # Precompute style clusters for smart seeds and diversity
         self._initialize_style_clusters()
+        
+        # Calculate all pairwise similarities once
+        print("Calculating similarity matrix...")
+        self.similarity_matrix = np.dot(self.normalized_embeddings, self.normalized_embeddings.T)
+        
+        # Initialize feedback system with enhanced weighting
+        self.user_engagement_metrics = {
+            'session_length': 0,
+            'likes_per_session': 0,
+            'dislikes_per_session': 0,
+            'exploration_depth': 0
+        }
         
     def _initialize_style_clusters(self):
         """Initialize style clusters for better recommendation diversity."""
@@ -94,8 +108,17 @@ class WatchBeamSearch:
         for cluster_id in selected_clusters:
             cluster_watches = self.cluster_to_watches[cluster_id]
             
+            # Filter cluster watches to only include valid indices
+            valid_cluster_watches = [idx for idx in cluster_watches if 0 <= idx < len(self.watch_data)]
+            
             # Filter to get diverse representatives (no variants)
-            diverse_watches = self.variant_detector.filter_diverse_watches(cluster_watches)
+            try:
+                diverse_watches = self.variant_detector.filter_diverse_watches(valid_cluster_watches)
+                # Additional bounds check after variant filtering
+                diverse_watches = [idx for idx in diverse_watches if 0 <= idx < len(self.watch_data)]
+            except Exception as e:
+                print(f"Error in variant filtering for cluster {cluster_id}: {e}")
+                diverse_watches = valid_cluster_watches
             
             if diverse_watches:
                 # Pick a representative watch from this cluster (closest to cluster center)
@@ -105,35 +128,54 @@ class WatchBeamSearch:
                 best_distance = float('inf')
                 
                 for watch_idx in diverse_watches:
-                    distance = np.linalg.norm(self.normalized_embeddings[watch_idx] - cluster_center)
-                    if distance < best_distance:
-                        best_distance = distance
-                        best_watch = watch_idx
+                    if 0 <= watch_idx < len(self.watch_data):  # Additional bounds check
+                        distance = np.linalg.norm(self.normalized_embeddings[watch_idx] - cluster_center)
+                        if distance < best_distance:
+                            best_distance = distance
+                            best_watch = watch_idx
                 
                 if best_watch is not None:
                     seeds.append(best_watch)
-                    # Check bounds before accessing watch data
-                    if best_watch < len(self.watch_data):
-                        print(f"Selected seed from cluster {cluster_id}: {self.watch_data[best_watch]['brand']} {self.watch_data[best_watch]['model_name']}")
-                    else:
-                        print(f"Selected seed from cluster {cluster_id}: index {best_watch} (out of bounds)")
+                    print(f"Selected seed from cluster {cluster_id}: {self.watch_data[best_watch]['brand']} {self.watch_data[best_watch].get('model', 'Unknown')}")
+                else:
+                    print(f"No valid watch found in cluster {cluster_id}")
         
         # If we need more seeds, add diverse random ones
         while len(seeds) < num_seeds:
             available_indices = [i for i in range(len(self.watch_data)) if i not in seeds]
             if available_indices:
-                # Filter for diversity
-                diverse_available = self.variant_detector.filter_diverse_watches(available_indices)
+                # Filter for diversity with bounds checking
+                try:
+                    diverse_available = self.variant_detector.filter_diverse_watches(available_indices)
+                    diverse_available = [idx for idx in diverse_available if 0 <= idx < len(self.watch_data)]
+                except Exception as e:
+                    print(f"Error in variant filtering for fallback seeds: {e}")
+                    diverse_available = available_indices
+                
                 if diverse_available:
-                    seeds.append(random.choice(diverse_available))
+                    selected_idx = random.choice(diverse_available)
+                    seeds.append(selected_idx)
+                    print(f"Added fallback seed: index {selected_idx}")
+                else:
+                    # Last resort: pick any available index
+                    if available_indices:
+                        selected_idx = random.choice(available_indices)
+                        seeds.append(selected_idx)
+                        print(f"Added random seed: index {selected_idx}")
+                    else:
+                        break
         
-        # Convert to watch objects
+        # Convert to watch objects with bounds checking
         seed_watches = []
         for idx in seeds:
-            watch = self.watch_data[idx].copy()
-            watch['index'] = idx
-            seed_watches.append(watch)
-            self.seen_watches.add(idx)
+            if 0 <= idx < len(self.watch_data):
+                watch = self.watch_data[idx].copy()
+                watch['index'] = idx
+                seed_watches.append(watch)
+                self.seen_watches.add(idx)
+                self._add_series_to_seen(idx)
+            else:
+                print(f"Skipping invalid index: {idx}")
         
         print(f"Smart seeds selected: {len(seed_watches)} diverse watches (variant-aware)")
         return seed_watches
@@ -166,8 +208,10 @@ class WatchBeamSearch:
         self.metrics['total_feedback'] += 1
         if feedback_type == 'like':
             self.metrics['likes'] += 1
+            self.user_engagement_metrics['likes_per_session'] += 1
         elif feedback_type == 'dislike':
             self.metrics['dislikes'] += 1
+            self.user_engagement_metrics['dislikes_per_session'] += 1
         
         # Track brand and style coverage
         watch = self.watch_data[watch_index]
@@ -195,7 +239,7 @@ class WatchBeamSearch:
     def _classify_watch_style(self, watch: Dict[str, Any]) -> str:
         """Classify watch into style categories."""
         description = watch.get('description', '').lower()
-        model = watch.get('model_name', '').lower()
+        model = watch.get('model', '').lower()
         combined_text = description + ' ' + model
         
         if any(word in combined_text for word in ['dive', 'diver', 'water', 'sea', 'ocean', 'submarine']):
@@ -335,16 +379,18 @@ class WatchBeamSearch:
             print("No user preferences yet, using smart diverse selection")
             if valid_current_candidates:
                 similar_watches = self.find_similar_watches(valid_current_candidates, self.beam_width * 3)
-                # Double-check to filter out seen watches
-                similar_watches = [(idx, score) for idx, score in similar_watches if idx not in self.seen_watches]
+                # Double-check to filter out seen watches and series
+                similar_watches = [(idx, score) for idx, score in similar_watches 
+                                 if idx not in self.seen_watches and not self._is_series_seen(idx)]
             else:
                 # Use smart clustering-based selection instead of random
                 similar_watches = []
-                available_indices = [i for i in range(len(self.watch_data)) if i not in self.seen_watches]
-                print(f"Available unseen watches: {len(available_indices)}")
+                available_indices = [i for i in range(len(self.watch_data)) 
+                                   if i not in self.seen_watches and not self._is_series_seen(i)]
+                print(f"Available unseen watches/series: {len(available_indices)}")
                 
                 if len(available_indices) == 0:
-                    print("No unseen watches available - resetting exploration")
+                    print("No unseen watches/series available - resetting exploration")
                     self.reset_exploration()
                     available_indices = list(range(len(self.watch_data)))
                 
@@ -367,6 +413,7 @@ class WatchBeamSearch:
             for idx in sorted_indices:
                 if (idx not in current_candidates and 
                     idx not in self.seen_watches and 
+                    not self._is_series_seen(idx) and  # Add series-based filtering
                     idx < len(self.watch_data) and  # Add bounds check
                     len(similar_watches) < self.beam_width * 3):
                     
@@ -392,12 +439,13 @@ class WatchBeamSearch:
                 available_indices = [i for i in range(len(self.watch_data)) 
                                    if (i not in current_candidates and 
                                        i not in self.seen_watches and 
+                                       not self._is_series_seen(i) and  # Add series filtering
                                        i not in [w[0] for w in similar_watches])]
                 
                 print(f"Adding smart exploration from {len(available_indices)} available watches")
                 
                 if len(available_indices) == 0:
-                    print("No more unseen watches - resetting exploration")
+                    print("No more unseen watches/series - resetting exploration")
                     self.reset_exploration()
                     available_indices = [i for i in range(len(self.watch_data)) 
                                        if (i not in current_candidates and 
@@ -428,6 +476,57 @@ class WatchBeamSearch:
         
         print(f"Final selected watches after variant filtering: {len(verified_selected)}")
         
+        # ENHANCED: Handle case when filtering is too restrictive
+        if len(verified_selected) == 0:
+            print("WARNING: No watches passed all filters. Implementing fallback strategy...")
+            
+            # Strategy 1: Relax series filtering temporarily
+            if len(self.seen_series) > 0:
+                print("Fallback 1: Temporarily ignoring series filtering...")
+                # Get top candidates without series filtering
+                fallback_similar = self.find_similar_watches(current_candidates, k=self.beam_width * 3)
+                
+                # Apply only basic filtering (no series filtering)
+                fallback_candidates = []
+                for idx, score in fallback_similar:
+                    if (idx not in self.seen_watches and 
+                        idx not in current_candidates):
+                        fallback_candidates.append((idx, score))
+                
+                if fallback_candidates:
+                    # Apply variant filtering but not series filtering
+                    verified_selected = self._apply_variant_filtering_with_scores(fallback_candidates[:self.beam_width])
+                    print(f"Fallback 1 result: {len(verified_selected)} watches")
+            
+            # Strategy 2: If still empty, completely reset series tracking
+            if len(verified_selected) == 0 and len(self.seen_series) > 5:
+                print("Fallback 2: Resetting series tracking to expand options...")
+                self.seen_series.clear()  # Clear series tracking
+                
+                # Try again with fresh series tracking
+                fallback_similar = self.find_similar_watches(current_candidates, k=self.beam_width * 2)
+                fallback_candidates = []
+                for idx, score in fallback_similar:
+                    if (idx not in self.seen_watches and 
+                        idx not in current_candidates):
+                        fallback_candidates.append((idx, score))
+                
+                if fallback_candidates:
+                    verified_selected = self._apply_variant_filtering_with_scores(fallback_candidates[:self.beam_width])
+                    print(f"Fallback 2 result: {len(verified_selected)} watches")
+            
+            # Strategy 3: If still empty, get diverse recommendations from unexplored clusters
+            if len(verified_selected) == 0:
+                print("Fallback 3: Getting diverse recommendations from unexplored areas...")
+                available_indices = [i for i in range(len(self.watch_data)) 
+                                   if i not in self.seen_watches and i not in current_candidates]
+                
+                if available_indices:
+                    # Get cluster representatives
+                    cluster_reps = self._get_diverse_cluster_representatives(available_indices, self.beam_width)
+                    for idx in cluster_reps:
+                        verified_selected.append((idx, 0.5))  # Moderate score for exploration
+        
         # Calculate diversity score for this batch
         if len(verified_selected) > 1:
             batch_diversity = self._calculate_batch_diversity([idx for idx, _ in verified_selected])
@@ -453,7 +552,8 @@ class WatchBeamSearch:
             
             # Add to seen watches to avoid repetition
             self.seen_watches.add(idx)
-            print(f"Added watch {idx} ({watch['brand']} {watch['model_name']}) to seen list")
+            self._add_series_to_seen(idx)
+            print(f"Added watch {idx} ({watch['brand']} {watch['model']}) to seen list")
             
             # Update brand coverage metrics
             self.metrics['brand_coverage'].add(watch['brand'])
@@ -619,8 +719,10 @@ class WatchBeamSearch:
         Reset the seen watches tracker to allow re-exploration.
         Called when we've seen too many watches or need fresh exploration.
         """
-        print(f"Resetting exploration - had seen {len(self.seen_watches)} watches")
+        print(f"Resetting exploration - had seen {len(self.seen_watches)} watches and {len(self.seen_series)} series")
         self.seen_watches.clear()
+        self.seen_series.clear()
+        print("Reset exploration for new session")
     
     def get_exploration_stats(self):
         """
@@ -628,12 +730,25 @@ class WatchBeamSearch:
         """
         total_watches = len(self.watch_data)
         seen_watches = len(self.seen_watches)
+        seen_series = len(self.seen_series)
         exploration_percentage = (seen_watches / total_watches) * 100
+        
+        # Calculate total unique series in dataset
+        all_series = set()
+        for i in range(total_watches):
+            series = self._get_watch_series(i)
+            if series:
+                all_series.add(series)
+        
+        series_exploration_percentage = (seen_series / len(all_series)) * 100 if all_series else 0
         
         return {
             'total_watches': total_watches,
             'seen_watches': seen_watches,
-            'exploration_percentage': exploration_percentage
+            'exploration_percentage': exploration_percentage,
+            'total_series': len(all_series),
+            'seen_series': seen_series,
+            'series_exploration_percentage': series_exploration_percentage
         }
     
     def get_watch_by_index(self, index: int) -> Dict[str, Any]:
@@ -666,6 +781,14 @@ class WatchBeamSearch:
         # Calculate exploration metrics
         exploration_percentage = len(self.seen_watches) / len(self.watch_data) * 100
         
+        # Calculate series exploration metrics
+        all_series = set()
+        for i in range(len(self.watch_data)):
+            series = self._get_watch_series(i)
+            if series:
+                all_series.add(series)
+        series_exploration_percentage = len(self.seen_series) / len(all_series) * 100 if all_series else 0
+        
         return {
             'session_duration_minutes': session_duration / 60,
             'total_steps': self.metrics['total_steps'],
@@ -676,6 +799,9 @@ class WatchBeamSearch:
             'exploration_percentage': exploration_percentage,
             'watches_seen': len(self.seen_watches),
             'total_watches': len(self.watch_data),
+            'series_exploration_percentage': series_exploration_percentage,
+            'series_seen': len(self.seen_series),
+            'total_series': len(all_series),
             'average_diversity_score': avg_diversity,
             'brand_coverage_percentage': brand_coverage * 100,
             'style_coverage_percentage': style_coverage * 100,
@@ -759,4 +885,87 @@ class WatchBeamSearch:
         if len(filtered_indices) < len(watch_indices):
             print(f"Variant filtering: {len(watch_indices)} -> {len(filtered_indices)} watches (removed {len(watch_indices) - len(filtered_indices)} variants)")
         
-        return filtered_indices 
+        return filtered_indices
+
+    def _get_watch_series(self, watch_idx: int) -> str:
+        """Extract series information from watch data."""
+        if watch_idx >= len(self.watch_data):
+            return ""
+        
+        watch = self.watch_data[watch_idx]
+        
+        # Try new data structure first
+        if 'specs' in watch and watch['specs'] and 'serie' in watch['specs']:
+            series = watch['specs']['serie']
+            if series and series != '-':
+                return series
+        
+        # Try legacy structure with variant info
+        if 'variant_info' in watch and watch['variant_info']:
+            return f"{watch.get('brand', '')}-{watch.get('model', '')}-variant"
+        
+        # Fallback: use brand + model as series identifier
+        brand = watch.get('brand', '')
+        model = watch.get('model', watch.get('model_name', ''))
+        return f"{brand}-{model}"
+
+    def _is_series_seen(self, watch_idx: int) -> bool:
+        """Check if a watch's series has already been seen."""
+        series = self._get_watch_series(watch_idx)
+        return series in self.seen_series
+
+    def _add_series_to_seen(self, watch_idx: int):
+        """Add a watch's series to the seen set."""
+        series = self._get_watch_series(watch_idx)
+        if series:
+            self.seen_series.add(series)
+            print(f"Added series '{series}' to seen list")
+
+    def get_series_watches(self, watch_index: int) -> List[Dict[str, Any]]:
+        """Get all watches from the same series as the given watch."""
+        if watch_index < 0 or watch_index >= len(self.watch_data):
+            return []
+        
+        # Get the series of the reference watch
+        reference_watch = self.watch_data[watch_index]
+        reference_series = self._get_watch_series(watch_index)
+        
+        if not reference_series or reference_series in ['', '-']:
+            return []
+        
+        # Find all watches in the same series
+        series_watches = []
+        for idx, watch in enumerate(self.watch_data):
+            watch_series = self._get_watch_series(idx)
+            if watch_series == reference_series:
+                watch_copy = watch.copy()
+                watch_copy['index'] = idx
+                watch_copy['is_current'] = (idx == watch_index)
+                
+                # Add variant information
+                variants = self.variant_detector.get_variant_group(idx)
+                watch_copy['has_variants'] = len(variants) > 1
+                watch_copy['variant_count'] = len(variants)
+                if len(variants) > 1:
+                    watch_copy['is_representative'] = self.variant_detector.get_representative(idx) == idx
+                
+                # Add visual similarity to reference watch
+                if idx != watch_index:
+                    similarity = float(cosine_similarity(
+                        self.normalized_embeddings[watch_index:watch_index+1],
+                        self.normalized_embeddings[idx:idx+1]
+                    )[0][0])
+                    watch_copy['similarity_to_reference'] = similarity
+                else:
+                    watch_copy['similarity_to_reference'] = 1.0
+                
+                series_watches.append(watch_copy)
+        
+        # Sort by similarity to reference watch (current watch first, then by similarity)
+        series_watches.sort(key=lambda x: (
+            0 if x['is_current'] else 1,  # Current watch first
+            -x['similarity_to_reference']  # Then by similarity descending
+        ))
+        
+        print(f"Found {len(series_watches)} watches in series '{reference_series}'")
+        return series_watches 
