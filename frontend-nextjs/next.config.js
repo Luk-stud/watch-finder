@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'export',
+  trailingSlash: true,
   images: {
+    unoptimized: true,
     domains: ['extropian.b-cdn.net'],
     remotePatterns: [
       {
@@ -9,17 +12,8 @@ const nextConfig = {
         pathname: '/data/brand_images/**',
       },
     ],
-    // Allow local images in /public/images/
-    unoptimized: false,
   },
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: 'http://localhost:5001/api/:path*',
-      },
-    ];
-  },
+  // Remove rewrites for static export
 };
 
 module.exports = nextConfig; 
