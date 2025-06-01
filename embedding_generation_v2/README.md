@@ -5,9 +5,10 @@ This system generates semantic embeddings for watches using text descriptions in
 ## 🎯 Overview
 
 Instead of using image-based embeddings, this approach:
-1. **Generates AI descriptions** of watches focusing on design language and aesthetic vibe
+1. **Generates AI descriptions** of watches using GPT-4o mini focusing on design language and aesthetic vibe
 2. **Creates text embeddings** from these descriptions using OpenAI's embedding API
 3. **Focuses on vibes and design** rather than technical specifications
+4. **Higher quality descriptions** with better understanding of watch design language and luxury aesthetics
 
 ## 🔧 Setup
 
@@ -55,7 +56,7 @@ The AI generates descriptions following this prompt:
 > "Give me a description for the [Brand] [Model] watch. Focus on the vibe and design language of this timepiece. Describe the overall aesthetic and design philosophy, visual character and personality, mood and feeling it conveys, design elements that make it distinctive, and target audience or lifestyle it represents. Do NOT describe specific technical specifications, strap/band details, exact measurements, price information, or availability. Keep the description concise (2-3 sentences) and focused on visual and emotional aspects."
 
 ### Example Generated Description
-**Rolex Submariner**: "The Rolex Submariner embodies a bold, utilitarian aesthetic with its clean, geometric lines and robust presence that exudes confidence and reliability. Its design philosophy balances professional functionality with timeless elegance, creating a visual language that speaks to adventurous spirits and those who value precision craftsmanship, while maintaining an understated luxury that works equally well in boardrooms and underwater expeditions."
+**Rolex Submariner**: "The Rolex Submariner embodies a bold, utilitarian aesthetic that merges professional functionality with timeless elegance, featuring clean geometric lines and a robust presence that exudes unwavering confidence and reliability. Its iconic design language speaks to adventurous spirits and discerning individuals who value precision craftsmanship, creating a sophisticated tool watch that seamlessly transitions from underwater expeditions to boardroom meetings with understated luxury and enduring appeal."
 
 ## 📁 Output Files
 
@@ -97,7 +98,7 @@ cp output/watch_metadata.pkl ../backend/data/watch_metadata.pkl
 ## ⚙️ Configuration
 
 ### Models Used
-- **Description Generation**: `gpt-3.5-turbo`
+- **Description Generation**: `gpt-4o-mini`
 - **Text Embeddings**: `text-embedding-3-small`
 
 ### Rate Limiting
@@ -110,7 +111,7 @@ You can modify the prompt in the `generate_watch_description()` method to focus 
 ## 💰 Cost Estimation
 
 For 3,963 watches (latest production scrape):
-- **GPT-3.5-turbo**: ~$4.00 (description generation)
+- **GPT-4o-mini**: ~$4.00 (description generation)
 - **text-embedding-3-small**: ~$0.10 (embedding generation)
 - **Total**: ~$4.10
 

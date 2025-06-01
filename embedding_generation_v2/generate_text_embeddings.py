@@ -43,7 +43,7 @@ class WatchTextEmbeddingGenerator:
         
         self.client = OpenAI(api_key=self.api_key)
         self.embedding_model = "text-embedding-3-small"
-        self.description_model = "gpt-3.5-turbo"
+        self.description_model = "gpt-4o-mini"
         
         # Rate limiting
         self.description_delay = 1.0  # seconds between description requests
