@@ -1,81 +1,100 @@
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Compass, Heart, History } from 'lucide-react';
+import { User, X, Compass, Heart, History } from 'lucide-react';
 import type { ViewType } from '@/types';
 import { cn } from '@/lib/utils';
 
 interface NavigationProps {
   currentView: ViewType;
-  likedCount: number;
   onViewChange: (view: ViewType) => void;
+  onMenuClose?: () => void;
+  likedCount: number;
 }
 
-export default function Navigation({ currentView, likedCount, onViewChange }: NavigationProps) {
-  const navItems = [
-    {
-      id: 'discover' as ViewType,
-      label: 'Discover',
-      icon: Compass,
-      count: null,
-    },
+const UserMenu = ({ onViewChange, onClose, likedCount }: { onViewChange: (view: ViewType) => void; onClose: () => void; likedCount: number; }) => {
+  const menuItems = [
     {
       id: 'liked' as ViewType,
-      label: 'Liked',
+      label: 'Past Likes',
       icon: Heart,
-      count: likedCount,
     },
     {
       id: 'history' as ViewType,
       label: 'History',
       icon: History,
-      count: null,
     },
   ];
 
   return (
-    <nav className="flex bg-white rounded-xl border border-gray-200 p-1">
-      {navItems.map((item) => {
-        const Icon = item.icon;
-        const isActive = currentView === item.id;
+    <motion.div 
+      className="absolute top-12 right-0 bg-white border border-gray-200 rounded-lg shadow-xl p-4 w-64 z-[1000]"
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+    >
+      <button onClick={onClose} className="absolute top-2 right-2 text-gray-500 hover:text-gray-700">
+        <X size={20} />
+      </button>
+      <h3 className="text-lg font-semibold mb-3 text-gray-800">Menu</h3>
+      <ul className="space-y-2">
+        {menuItems.map(item => {
+          const Icon = item.icon;
+          return (
+            <li key={item.id}>
+              <button
+                onClick={() => {
+                  onViewChange(item.id);
+                  onClose();
+                }}
+                className="w-full flex items-center gap-3 p-2 rounded-md text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+              >
+                <Icon className="w-5 h-5" />
+                <span className="text-sm font-medium">{item.label}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </motion.div>
+  );
+};
 
-        return (
-          <motion.button
-            key={item.id}
-            onClick={() => onViewChange(item.id)}
-            className={cn(
-              'relative flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all flex-1',
-              isActive
-                ? 'text-blue-600 bg-blue-50'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-            )}
-            whileTap={{ scale: 0.98 }}
-          >
-            {isActive && (
-              <motion.div
-                className="absolute inset-0 bg-blue-50 rounded-lg"
-                layoutId="activeTab"
-                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-              />
-            )}
-            
-            <div className="relative z-10 flex items-center gap-1">
-              <Icon className="w-4 h-4" />
-              <span className="text-sm">{item.label}</span>
-              {item.count !== null && item.count > 0 && (
-                <motion.span
-                  className="bg-blue-600 text-white text-xs px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none"
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ type: 'spring', stiffness: 300 }}
-                >
-                  {item.count}
-                </motion.span>
-              )}
-            </div>
-          </motion.button>
-        );
-      })}
+export default function Navigation({ currentView, onViewChange, onMenuClose, likedCount }: NavigationProps) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  const toggleMenu = () => {
+    setIsMenuOpen(!isMenuOpen);
+  };
+
+  const handleCloseMenu = () => {
+    setIsMenuOpen(false);
+    if (onMenuClose) {
+      onMenuClose();
+    }
+  };
+
+  return (
+    <nav className="relative flex justify-end items-center">
+      <motion.button
+        onClick={toggleMenu}
+        className={cn(
+          'p-2 rounded-full bg-black/30 hover:bg-black/50 transition-colors',
+          isMenuOpen ? 'bg-black/50' : 'bg-black/20'
+        )}
+        whileTap={{ scale: 0.95 }}
+      >
+        <User className="w-5 h-5 text-white" />
+      </motion.button>
+
+      {isMenuOpen && (
+        <UserMenu 
+          onViewChange={onViewChange} 
+          onClose={handleCloseMenu} 
+          likedCount={likedCount}
+        />
+      )}
     </nav>
   );
 } 

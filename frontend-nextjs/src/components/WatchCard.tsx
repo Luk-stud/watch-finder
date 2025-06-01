@@ -1,12 +1,13 @@
 'use client';
 
 import React from 'react';
-import { useState } from 'react';
-import { motion, PanInfo } from 'framer-motion';
+import { useState, useEffect } from 'react';
+import { motion, PanInfo, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
-import { Heart, X, Droplets, Clock, Settings, Diamond } from 'lucide-react';
-import type { Watch } from '@/types';
+import { Heart, X, Droplets, Clock, Settings, Diamond, Info, ChevronDown } from 'lucide-react';
+import type { Watch, ViewType } from '@/types';
 import { formatPrice, getImageUrl } from '@/lib/utils';
+import Navigation from './Navigation';
 
 interface WatchCardProps {
   watch: Watch;
@@ -14,12 +15,38 @@ interface WatchCardProps {
   onPass: () => void;
   isActive?: boolean;
   onShowSeries?: (watchIndex: number) => void;
+  currentView: ViewType;
+  likedCount: number;
+  onViewChange: (view: ViewType) => void;
+  onMenuClose?: () => void;
 }
 
-export default function WatchCard({ watch, onLike, onPass, isActive = true, onShowSeries }: WatchCardProps) {
+export default function WatchCard({ 
+  watch, 
+  onLike, 
+  onPass, 
+  isActive = true, 
+  onShowSeries, 
+  currentView,
+  likedCount,
+  onViewChange,
+  onMenuClose 
+}: WatchCardProps) {
   const [dragX, setDragX] = useState(0);
   const [imageError, setImageError] = useState(false);
   const [useNextImage, setUseNextImage] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showDetailsOverlay, setShowDetailsOverlay] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const handleDrag = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     setDragX(info.offset.x);
@@ -52,24 +79,32 @@ export default function WatchCard({ watch, onLike, onPass, isActive = true, onSh
   };
 
   const getSwipeIndicator = () => {
+    const intensity = Math.abs(dragX) / 100;
+    
     if (dragX > 50) {
       return (
         <motion.div
-          className="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-medium z-10"
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
+          className="absolute top-6 right-6 bg-green-500 text-white px-4 py-2 rounded-xl text-lg font-bold z-20 border-4 border-green-300"
+          initial={{ scale: 0, rotate: -12 }}
+          animate={{ scale: 1 + intensity * 0.2, rotate: -12 }}
+          style={{ 
+            boxShadow: '0 8px 32px rgba(34, 197, 94, 0.4)',
+          }}
         >
-          <Heart className="w-4 h-4" />
+          LIKE
         </motion.div>
       );
     } else if (dragX < -50) {
       return (
         <motion.div
-          className="absolute top-4 left-4 bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium z-10"
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
+          className="absolute top-6 left-6 bg-red-500 text-white px-4 py-2 rounded-xl text-lg font-bold z-20 border-4 border-red-300"
+          initial={{ scale: 0, rotate: 12 }}
+          animate={{ scale: 1 + intensity * 0.2, rotate: 12 }}
+          style={{ 
+            boxShadow: '0 8px 32px rgba(239, 68, 68, 0.4)',
+          }}
         >
-          <X className="w-4 h-4" />
+          PASS
         </motion.div>
       );
     }
@@ -122,209 +157,338 @@ export default function WatchCard({ watch, onLike, onPass, isActive = true, onSh
   const complications = getComplications();
 
   return (
-    <motion.div
-      className="bg-white rounded-2xl shadow-lg overflow-hidden select-none"
-      drag={isActive ? "x" : false}
-      dragConstraints={{ left: 0, right: 0 }}
-      dragElastic={0.7}
-      onDrag={handleDrag}
-      onDragEnd={handleDragEnd}
-      animate={{
-        x: dragX,
-        rotate: dragX * 0.1,
-        opacity: Math.max(0.5, 1 - Math.abs(dragX) / 200),
-      }}
-      transition={{ type: "spring", stiffness: 300, damping: 30 }}
-      style={{ touchAction: 'pan-y' }}
-    >
-      {/* Swipe Indicators */}
-      {getSwipeIndicator()}
+    <>
+      <motion.div
+        className="bg-white rounded-3xl shadow-2xl overflow-hidden select-none w-full mx-auto flex flex-col relative"
+        style={{ 
+          touchAction: 'pan-y',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+          marginBottom: '2rem',
+          height: 'calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 4rem)',
+          maxHeight: 'calc(-webkit-fill-available - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 4rem)',
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: 0
+        }}
+        drag={isActive ? "x" : false}
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.7}
+        onDrag={handleDrag}
+        onDragEnd={handleDragEnd}
+        animate={{
+          x: dragX,
+          rotate: dragX * 0.05,
+          scale: 1 - Math.abs(dragX) * 0.0002,
+          opacity: Math.max(0.7, 1 - Math.abs(dragX) / 300),
+        }}
+        initial={{ 
+          scale: 0.8,
+          opacity: 0,
+          y: 50,
+        }}
+        exit={{ 
+          scale: 0.8,
+          opacity: 0,
+          y: dragX > 50 ? -100 : dragX < -50 ? 100 : 0,
+          x: dragX > 50 ? 100 : dragX < -50 ? -100 : 0,
+          transition: { duration: 0.2, ease: "easeOut" }
+        }}
+        transition={{ 
+          type: "spring",
+          stiffness: 400,
+          damping: 40,
+          mass: 0.8,
+        }}
+        layout
+      >
+        {/* Swipe Indicators */}
+        {getSwipeIndicator()}
 
-      {/* Image Section */}
-      <div className="flex items-center justify-center w-full h-80 bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden" style={{ height: '320px' }}>
-        {useNextImage && !imageError ? (
-          <Image
-            src={getWatchImageUrl(watch)}
-            alt={`${brand} ${model}`}
-            width={400}
-            height={320}
-            className="object-contain"
-            sizes="(max-width: 768px) 100vw, 400px"
-            onError={handleImageError}
-            priority={isActive}
-            style={{ objectFit: 'contain' }}
-          />
-        ) : (
-          <img
-            src={getWatchImageUrl(watch)}
-            alt={`${brand} ${model}`}
-            className="w-full h-full object-contain p-8"
-            onError={handleImageError}
-            style={{ objectFit: 'contain' }}
-          />
-        )}
-      </div>
-
-      {/* Content Section */}
-      <div className="p-6 space-y-4">
-        {/* Brand & Model */}
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 mb-1">{brand}</h2>
-          <p className="text-lg text-gray-600">{model}</p>
-          {watch.specs?.serie && watch.specs.serie !== '-' && (
-            <p className="text-sm text-gray-500">{watch.specs.serie}</p>
-          )}
-        </div>
-
-        {/* Price & Availability */}
-        <div className="flex items-center justify-between">
-          <div className="text-2xl font-bold text-green-600">
-            {getFormattedPrice()}
-          </div>
-          {watch.specs?.availability && (
-            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-              watch.specs.availability === 'Yes' 
-                ? 'bg-green-100 text-green-800' 
-                : watch.specs.availability === 'Out of Stock'
-                ? 'bg-red-100 text-red-800'
-                : 'bg-gray-100 text-gray-800'
-            }`}>
-              {watch.specs.availability === 'Yes' ? 'Available' : watch.specs.availability}
-            </span>
-          )}
-        </div>
-
-        {/* Key Specifications Grid */}
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          {/* Case Size */}
-          {(watch.specs?.diameter_mm || watch.case_diameter) && (
-            <div className="flex items-center gap-2">
-              <Settings className="w-4 h-4 text-gray-400" />
-              <div>
-                <span className="text-gray-500">Size:</span>
-                <span className="ml-1 font-medium">
-                  {watch.specs?.diameter_mm || watch.case_diameter}mm
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Water Resistance */}
-          {(watch.specs?.waterproofing_meters || watch.water_resistance) && (
-            <div className="flex items-center gap-2">
-              <Droplets className="w-4 h-4 text-blue-400" />
-              <div>
-                <span className="text-gray-500">WR:</span>
-                <span className="ml-1 font-medium">
-                  {watch.specs?.waterproofing_meters || watch.water_resistance}m
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Movement */}
-          {(watch.specs?.movement || watch.movement) && (
-            <div className="flex items-center gap-2 col-span-2">
-              <Clock className="w-4 h-4 text-orange-400" />
-              <div>
-                <span className="text-gray-500">Movement:</span>
-                <span className="ml-1 font-medium text-xs">
-                  {watch.specs?.movement || watch.movement}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Case Material */}
-          {(watch.specs?.case_material || watch.case_material) && (
-            <div className="flex items-center gap-2 col-span-2">
-              <Diamond className="w-4 h-4 text-purple-400" />
-              <div>
-                <span className="text-gray-500">Material:</span>
-                <span className="ml-1 font-medium text-xs">
-                  {watch.specs?.case_material || watch.case_material}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Additional Details from new structure */}
-        {watch.specs && (
-          <div className="space-y-3 pt-2 border-t border-gray-100">
-            
-            {/* Crystal & Dial Info */}
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              {watch.specs.crystal_material && watch.specs.crystal_material !== '-' && (
-                <div>
-                  <span className="text-gray-500">Crystal:</span>
-                  <span className="ml-1 font-medium">{watch.specs.crystal_material}</span>
-                </div>
-              )}
-              {watch.specs.dial_color && watch.specs.dial_color !== '-' && (
-                <div>
-                  <span className="text-gray-500">Dial:</span>
-                  <span className="ml-1 font-medium">{watch.specs.dial_color}</span>
-                </div>
-              )}
-              {watch.specs.case_finishing && watch.specs.case_finishing !== '-' && (
-                <div>
-                  <span className="text-gray-500">Finish:</span>
-                  <span className="ml-1 font-medium">{watch.specs.case_finishing}</span>
-                </div>
-              )}
-              {watch.specs.power_reserve_hour && watch.specs.power_reserve_hour !== '-' && (
-                <div>
-                  <span className="text-gray-500">Power:</span>
-                  <span className="ml-1 font-medium">{watch.specs.power_reserve_hour}h</span>
-                </div>
-              )}
-            </div>
-
-            {/* Complications */}
-            {complications.length > 0 && (
-              <div>
-                <span className="text-gray-500 text-xs">Complications:</span>
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {complications.map((comp, index) => (
-                    <span
-                      key={index}
-                      className="px-2 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium"
-                    >
-                      {comp}
-                    </span>
-                  ))}
-                </div>
-              </div>
+        {/* Full Image with Overlaid Info */}
+        <motion.div 
+          className="w-full h-full overflow-hidden relative flex flex-col"
+          style={{ backgroundColor: '#f1f2f0' }}
+          animate={{
+            scale: 1 + Math.abs(dragX) * 0.0001,
+          }}
+          transition={{ duration: 0.2 }}
+        >
+          {/* Image Container */}
+          <div className="relative flex-1">
+            {useNextImage && !imageError ? (
+              <motion.div
+                className="w-full h-full"
+                animate={{
+                  rotate: dragX * 0.02,
+                }}
+                transition={{ duration: 0.2 }}
+              >
+                <Image
+                  src={getWatchImageUrl(watch)}
+                  alt={`${brand} ${model}`}
+                  width={400}
+                  height={400}
+                  className="object-cover w-full h-full"
+                  sizes="(max-width: 640px) 280px, 400px"
+                  onError={handleImageError}
+                  priority={isActive}
+                  style={{ 
+                    objectFit: 'cover'
+                  }}
+                />
+              </motion.div>
+            ) : (
+              <motion.img
+                src={getWatchImageUrl(watch)}
+                alt={`${brand} ${model}`}
+                className="w-full h-full object-cover"
+                onError={handleImageError}
+                style={{ 
+                  objectFit: 'cover'
+                }}
+                animate={{
+                  rotate: dragX * 0.02,
+                }}
+                transition={{ duration: 0.2 }}
+              />
             )}
 
-            {/* Watch Type */}
-            {watch.specs.watch_type && watch.specs.watch_type !== '-' && (
-              <div className="text-xs">
-                <span className="text-gray-500">Type:</span>
-                <span className="ml-1 font-medium text-gray-700">{watch.specs.watch_type}</span>
+            {/* Enhanced gradient overlay for text visibility */}
+            <div 
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.4) 30%, transparent 60%)'
+              }}
+            />
+
+            {/* Overlaid Essential Info - Text content area (bottom left) */}
+            <div className="absolute bottom-0 left-0 z-20 p-4 text-left">
+              {/* Brand & Model */}
+              <div className="mb-1">
+                <h2 className="text-2xl font-bold mb-0.5 truncate text-white">{brand}</h2>
+                <p className="text-lg truncate text-white/90">{model}</p>
+                {watch.specs?.serie && watch.specs.serie !== '-' && (
+                  <p className="text-sm font-medium px-2 py-1 rounded-full inline-block mt-1 text-xs text-white" style={{ backgroundColor: '#558a86' }}>
+                    {watch.specs.serie}
+                  </p>
+                )}
               </div>
+
+              {/* Diameter Text Display */}
+              {(watch.specs?.diameter_mm || watch.case_diameter) && (
+                <div className="mt-1 text-xs text-white/80">
+                  <span>Diameter: {watch.specs?.diameter_mm || watch.case_diameter}mm</span>
+                </div>
+              )}
+
+              {/* Price */}
+              <div className="mt-1.5 text-xl font-bold text-white">
+                {getFormattedPrice()}
+              </div>
+            </div>
+          </div>
+
+          {/* Buttons below image */}
+          <div className="flex gap-2 p-4 bg-white/5 backdrop-blur-sm">
+            {/* Specs Button */}
+            <button
+              onClick={() => setShowDetailsOverlay(true)}
+              className="flex-1 flex items-center justify-center gap-2 text-white px-4 py-3 rounded-xl text-sm font-medium hover:opacity-80 transition-all duration-200 shadow-md"
+              style={{ backgroundColor: '#558a86' }}
+            >
+              <Info className="w-4 h-4" /> 
+              <span>SPECS</span>
+            </button>
+
+            {/* Series Button */}
+            {hasSeriesWatches() && onShowSeries && (
+              <button
+                onClick={() => onShowSeries?.(watch.index)}
+                className="flex-1 flex items-center justify-center gap-2 text-white px-4 py-3 rounded-xl text-sm font-medium hover:opacity-80 transition-all duration-200 shadow-md"
+                style={{ backgroundColor: '#a63e14' }}
+              >
+                <Settings className="w-4 h-4" />
+                <span>SERIES</span>
+              </button>
             )}
           </div>
-        )}
+        </motion.div>
+      </motion.div>
 
-        {/* Swipe Instructions */}
-        <div className="text-center text-xs text-gray-400 mt-4 pt-2 border-t border-gray-100">
-          Swipe right to like • Swipe left to pass
-        </div>
-
-        {/* Series Button */}
-        {hasSeriesWatches() && onShowSeries && (
-          <button
-            onClick={() => onShowSeries?.(watch.index)}
-            className="w-full mt-3 px-4 py-2 bg-gradient-to-r from-blue-50 to-purple-50 hover:from-blue-100 hover:to-purple-100 text-blue-700 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2"
+      {/* Details Overlay Modal */}
+      <AnimatePresence>
+        {showDetailsOverlay && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-end justify-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
           >
-            <Settings className="w-4 h-4" />
-            <span>View Series ({watch.specs?.serie})</span>
-            <span className="text-xs bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full">More</span>
-          </button>
+            {/* Backdrop */}
+            <div 
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setShowDetailsOverlay(false)}
+            />
+            
+            {/* Modal Content */}
+            <motion.div
+              className="relative rounded-t-3xl w-full max-w-sm mx-auto max-h-[70vh] overflow-hidden"
+              style={{ backgroundColor: '#f1f2f0' }}
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            >
+              {/* Modal Header */}
+              <div className="text-white p-6 sticky top-0 z-10" style={{ backgroundColor: '#558a86' }}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold">Watch Details</h3>
+                  <button
+                    onClick={() => setShowDetailsOverlay(false)}
+                    className="text-white hover:text-white/80 transition-colors p-2 rounded-full hover:bg-white/20"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-white/80">
+                  <ChevronDown className="w-4 h-4" />
+                  <span>Swipe down to close</span>
+                </div>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="p-6 space-y-6 overflow-y-auto max-h-[calc(70vh-120px)] overscroll-behavior-y-contain">
+                {/* Availability */}
+                {watch.specs?.availability && (
+                  <div className="flex items-center justify-between p-4 rounded-2xl border" style={{ backgroundColor: '#f1f2f0', borderColor: '#558a86' }}>
+                    <span className="font-medium" style={{ color: '#35342f' }}>Availability</span>
+                    <span className={`px-3 py-2 rounded-xl text-sm font-semibold shadow-sm text-white`} 
+                      style={{ 
+                        backgroundColor: watch.specs.availability === 'Yes' 
+                          ? '#558a86'
+                          : watch.specs.availability === 'Out of Stock'
+                          ? '#a63e14'
+                          : '#bfbabe'
+                      }}>
+                      {watch.specs.availability === 'Yes' ? 'Available' : watch.specs.availability}
+                    </span>
+                  </div>
+                )}
+
+                {/* Key Specifications */}
+                <div className="p-4 rounded-2xl shadow-sm border" style={{ backgroundColor: '#f1f2f0', borderColor: '#bfbabe' }}>
+                  <h4 className="text-lg font-semibold mb-3" style={{ color: '#35342f' }}>Specifications</h4>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {/* Water Resistance */}
+                    {(watch.specs?.waterproofing_meters || watch.water_resistance) && (
+                      <div className="flex items-center gap-2">
+                        <Droplets className="w-4 h-4" style={{ color: '#558a86' }} />
+                        <div>
+                          <span style={{ color: '#35342f' }}>WR:</span>
+                          <span className="ml-1 font-medium" style={{ color: '#35342f' }}>
+                            {watch.specs?.waterproofing_meters || watch.water_resistance}m
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Movement */}
+                    {(watch.specs?.movement || watch.movement) && (
+                      <div className="flex items-center gap-2 col-span-2">
+                        <Clock className="w-4 h-4" style={{ color: '#558a86' }} />
+                        <div>
+                          <span style={{ color: '#35342f' }}>Movement:</span>
+                          <span className="ml-1 font-medium text-xs" style={{ color: '#35342f' }}>
+                            {watch.specs?.movement || watch.movement}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Case Material */}
+                    {(watch.specs?.case_material || watch.case_material) && (
+                      <div className="flex items-center gap-2 col-span-2">
+                        <Diamond className="w-4 h-4" style={{ color: '#558a86' }} />
+                        <div>
+                          <span style={{ color: '#35342f' }}>Material:</span>
+                          <span className="ml-1 font-medium text-xs" style={{ color: '#35342f' }}>
+                            {watch.specs?.case_material || watch.case_material}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Additional Details */}
+                {watch.specs && (
+                  <div className="p-4 rounded-2xl shadow-sm border" style={{ backgroundColor: '#f1f2f0', borderColor: '#e1e0dd' }}>
+                    <h4 className="text-lg font-semibold mb-3" style={{ color: '#35342f' }}>Details</h4>
+                    
+                    {/* Crystal & Dial Info */}
+                    <div className="grid grid-cols-2 gap-3 text-xs mb-4">
+                      {watch.specs.crystal_material && watch.specs.crystal_material !== '-' && (
+                        <div className="p-2 rounded-lg border" style={{ backgroundColor: '#f1f2f0', borderColor: '#e1e0dd' }}>
+                          <span className="block text-xs" style={{ color: '#35342f' }}>Crystal:</span>
+                          <span className="font-medium" style={{ color: '#35342f' }}>{watch.specs.crystal_material}</span>
+                        </div>
+                      )}
+                      {watch.specs.dial_color && watch.specs.dial_color !== '-' && (
+                        <div className="p-2 rounded-lg border" style={{ backgroundColor: '#f1f2f0', borderColor: '#e1e0dd' }}>
+                          <span className="block text-xs" style={{ color: '#35342f' }}>Dial:</span>
+                          <span className="font-medium" style={{ color: '#35342f' }}>{watch.specs.dial_color}</span>
+                        </div>
+                      )}
+                      {watch.specs.case_finishing && watch.specs.case_finishing !== '-' && (
+                        <div className="p-2 rounded-lg border" style={{ backgroundColor: '#f1f2f0', borderColor: '#e1e0dd' }}>
+                          <span className="block text-xs" style={{ color: '#35342f' }}>Finish:</span>
+                          <span className="font-medium" style={{ color: '#35342f' }}>{watch.specs.case_finishing}</span>
+                        </div>
+                      )}
+                      {watch.specs.power_reserve_hour && watch.specs.power_reserve_hour !== '-' && (
+                        <div className="p-2 rounded-lg border" style={{ backgroundColor: '#f1f2f0', borderColor: '#e1e0dd' }}>
+                          <span className="block text-xs" style={{ color: '#35342f' }}>Power:</span>
+                          <span className="font-medium" style={{ color: '#35342f' }}>{watch.specs.power_reserve_hour}h</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Complications */}
+                    {complications.length > 0 && (
+                      <div className="mb-4">
+                        <span className="text-sm font-medium block mb-2" style={{ color: '#35342f' }}>Complications:</span>
+                        <div className="flex flex-wrap gap-2">
+                          {complications.map((comp, index) => (
+                            <span
+                              key={index}
+                              className="px-3 py-1 text-white rounded-full text-xs font-medium shadow-lg"
+                              style={{ backgroundColor: '#558a86' }}
+                            >
+                              {comp}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Watch Type */}
+                    {watch.specs.watch_type && watch.specs.watch_type !== '-' && (
+                      <div className="p-3 rounded-lg border" style={{ backgroundColor: '#f1f2f0', borderColor: '#e1e0dd' }}>
+                        <span className="text-xs block" style={{ color: '#35342f' }}>Type:</span>
+                        <span className="font-medium" style={{ color: '#35342f' }}>{watch.specs.watch_type}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {/* Bottom padding */}
+                <div className="h-4"></div>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
-      </div>
-    </motion.div>
+      </AnimatePresence>
+    </>
   );
 } 

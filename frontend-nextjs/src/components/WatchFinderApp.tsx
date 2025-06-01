@@ -95,6 +95,13 @@ export default function WatchFinderApp() {
       const likedIndices = likedWatches.map(w => w.index);
       const dislikedIndices = dislikedWatches.map(w => w.index);
       const currentCandidates = currentWatches.map(w => w.index);
+
+      // Get all series we've already seen
+      const seenSeries = new Set([
+        ...likedWatches.map(w => w.specs?.serie),
+        ...dislikedWatches.map(w => w.specs?.serie),
+        ...currentWatches.map(w => w.specs?.serie)
+      ].filter(serie => serie && serie !== '-' && serie !== 'All'));
       
       const response = await apiService.getRecommendations(
         likedIndices,
@@ -104,9 +111,20 @@ export default function WatchFinderApp() {
       );
       
       if (response.status === 'success' && response.recommendations.length > 0) {
-        setCurrentWatches(response.recommendations);
-        setCurrentIndex(0);
-        setStep(response.step);
+        // Filter out watches from series we've already seen
+        const filteredRecommendations = response.recommendations.filter(watch => {
+          const series = watch.specs?.serie;
+          return !series || series === '-' || series === 'All' || !seenSeries.has(series);
+        });
+
+        if (filteredRecommendations.length > 0) {
+          setCurrentWatches(filteredRecommendations);
+          setCurrentIndex(0);
+          setStep(response.step);
+        } else {
+          // If all recommendations were filtered out, try getting more
+          await getMoreRecommendations();
+        }
       } else {
         throw new Error('No more recommendations available');
       }
@@ -157,24 +175,56 @@ export default function WatchFinderApp() {
     if (!watch) return;
 
     try {
+      // Add the current watch's series to seen series if it has one
+      if (watch.specs?.serie && watch.specs.serie !== '-' && watch.specs.serie !== 'All') {
+        // Filter out any remaining watches from the same series in currentWatches
+        const filteredWatches = currentWatches.filter(w => 
+          w.index === watch.index || // Keep the current watch
+          !w.specs?.serie || // Keep watches without series
+          w.specs.serie === '-' || // Keep watches with no series
+          w.specs.serie === 'All' || // Keep watches with 'All' series
+          w.specs.serie !== watch.specs?.serie // Keep watches from different series
+        );
+
+        if (filteredWatches.length !== currentWatches.length) {
+          setCurrentWatches(filteredWatches);
+        }
+      }
+
       addLikedWatch(watch);
       await moveToNext();
     } catch (error) {
       console.error('Error liking watch:', error);
     }
-  }, [getCurrentWatch, addLikedWatch, moveToNext]);
+  }, [getCurrentWatch, currentWatches, addLikedWatch, moveToNext]);
 
   const handlePass = useCallback(async () => {
     const watch = getCurrentWatch();
     if (!watch) return;
 
     try {
+      // Add the current watch's series to seen series if it has one
+      if (watch.specs?.serie && watch.specs.serie !== '-' && watch.specs.serie !== 'All') {
+        // Filter out any remaining watches from the same series in currentWatches
+        const filteredWatches = currentWatches.filter(w => 
+          w.index === watch.index || // Keep the current watch
+          !w.specs?.serie || // Keep watches without series
+          w.specs.serie === '-' || // Keep watches with no series
+          w.specs.serie === 'All' || // Keep watches with different series
+          w.specs.serie !== watch.specs?.serie // Keep watches from different series
+        );
+
+        if (filteredWatches.length !== currentWatches.length) {
+          setCurrentWatches(filteredWatches);
+        }
+      }
+
       addDislikedWatch(watch);
       await moveToNext();
     } catch (error) {
       console.error('Error passing watch:', error);
     }
-  }, [getCurrentWatch, addDislikedWatch, moveToNext]);
+  }, [getCurrentWatch, currentWatches, addDislikedWatch, moveToNext]);
 
   const handleViewChange = (view: typeof currentView) => {
     setCurrentView(view);
@@ -236,41 +286,42 @@ export default function WatchFinderApp() {
   const renderLikedView = () => (
     <div className="p-6">
       <div className="mb-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Liked Watches</h2>
-        <p className="text-gray-600">Your favorite timepieces</p>
+        <h2 className="text-xl font-bold mb-2" style={{ color: '#35342f' }}>Liked Watches</h2>
+        <p style={{ color: '#35342f' }}>Your favorite timepieces</p>
       </div>
       
       {likedWatches.length === 0 ? (
         <div className="text-center py-16">
-          <Heart className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-600 mb-2">No liked watches yet</h3>
-          <p className="text-gray-500">Start discovering to build your collection</p>
+          <Heart className="w-12 h-12 mx-auto mb-4" style={{ color: '#37bbe4' }} />
+          <h3 className="text-lg font-semibold mb-2" style={{ color: '#35342f' }}>No liked watches yet</h3>
+          <p style={{ color: '#35342f' }}>Start discovering to build your collection</p>
         </div>
       ) : (
         <div className="space-y-4">
           {likedWatches.map((watch) => (
             <motion.div
               key={watch.index}
-              className="bg-white rounded-xl p-4 shadow-sm border border-gray-100"
+              className="rounded-xl p-4 shadow-sm border"
+              style={{ backgroundColor: '#f1f2f0', borderColor: '#e1e0dd' }}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
             >
               <div className="flex gap-4">
-                <div className="w-16 h-16 bg-gray-50 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
+                <div className="w-16 h-16 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ backgroundColor: '#e1e0dd' }}>
                   <Image
                     src={watch.image_url || getPlaceholderImage()}
                     alt={`${watch.brand} ${watch.model}`}
                     width={64}
                     height={64}
-                    className="object-contain w-full h-full"
+                    className="object-contain w-full h-full max-w-full max-h-full"
                     sizes="64px"
                   />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-900 truncate">{watch.brand}</h3>
-                  <p className="text-gray-600 truncate">{watch.model}</p>
+                  <h3 className="font-semibold truncate" style={{ color: '#35342f' }}>{watch.brand}</h3>
+                  <p className="truncate" style={{ color: '#35342f' }}>{watch.model}</p>
                   {watch.price && (
-                    <p className="text-green-600 font-medium mt-1">
+                    <p className="font-medium mt-1" style={{ color: '#37bbe4' }}>
                       {formatPrice(watch.price)}
                     </p>
                   )}
@@ -289,15 +340,15 @@ export default function WatchFinderApp() {
     return (
       <div className="p-6">
         <div className="mb-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Watch History</h2>
-          <p className="text-gray-600">All watches you&apos;ve reviewed</p>
+          <h2 className="text-xl font-bold mb-2" style={{ color: '#35342f' }}>Watch History</h2>
+          <p style={{ color: '#35342f' }}>All watches you&apos;ve reviewed</p>
         </div>
         
         {allWatches.length === 0 ? (
           <div className="text-center py-16">
-            <History className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-600 mb-2">No history yet</h3>
-            <p className="text-gray-500">Start discovering to see your history</p>
+            <History className="w-12 h-12 mx-auto mb-4" style={{ color: '#37bbe4' }} />
+            <h3 className="text-lg font-semibold mb-2" style={{ color: '#35342f' }}>No history yet</h3>
+            <p style={{ color: '#35342f' }}>Start discovering to see your history</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -306,29 +357,30 @@ export default function WatchFinderApp() {
               return (
                 <motion.div
                   key={watch.index}
-                  className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-100"
+                  className="flex items-center gap-3 p-3 rounded-lg shadow-sm border"
+                  style={{ backgroundColor: '#f1f2f0', borderColor: '#e1e0dd' }}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                 >
-                  <div className="w-12 h-12 bg-gray-50 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
+                  <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ backgroundColor: '#e1e0dd' }}>
                     <Image
                       src={watch.image_url || getPlaceholderImage()}
                       alt={`${watch.brand} ${watch.model}`}
                       width={48}
                       height={48}
-                      className="object-contain w-full h-full"
+                      className="object-contain w-full h-full max-w-full max-h-full"
                       sizes="48px"
                     />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-gray-900 truncate">{watch.brand}</h3>
-                    <p className="text-sm text-gray-600 truncate">{watch.model}</p>
+                    <h3 className="font-medium truncate" style={{ color: '#35342f' }}>{watch.brand}</h3>
+                    <p className="text-sm truncate" style={{ color: '#35342f' }}>{watch.model}</p>
                   </div>
-                  <div className={`p-2 rounded-full ${isLiked ? 'bg-green-100' : 'bg-red-100'}`}>
+                  <div className={`p-2 rounded-full ${isLiked ? '' : ''}`} style={{ backgroundColor: isLiked ? '#37bbe4' : '#e1e0dd' }}>
                     {isLiked ? (
-                      <Heart className="w-4 h-4 text-green-600" />
+                      <Heart className="w-4 h-4 text-white" />
                     ) : (
-                      <X className="w-4 h-4 text-red-600" />
+                      <X className="w-4 h-4" style={{ color: '#35342f' }} />
                     )}
                   </div>
                 </motion.div>
@@ -350,14 +402,15 @@ export default function WatchFinderApp() {
 
   if (currentScreen === 'error') {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+      <div className="min-h-screen flex items-center justify-center p-6" style={{ backgroundColor: '#e1e0dd' }}>
         <div className="text-center max-w-md">
-          <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Connection Error</h2>
-          <p className="text-gray-600 mb-6">{error}</p>
+          <AlertTriangle className="w-16 h-16 mx-auto mb-4" style={{ color: '#37bbe4' }} />
+          <h2 className="text-2xl font-bold mb-2" style={{ color: '#35342f' }}>Connection Error</h2>
+          <p className="mb-6" style={{ color: '#35342f' }}>{error}</p>
           <button
             onClick={initializeApp}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+            className="px-6 py-3 text-white rounded-lg font-medium hover:opacity-80 transition-colors"
+            style={{ backgroundColor: '#37bbe4' }}
           >
             Try Again
           </button>
@@ -366,63 +419,54 @@ export default function WatchFinderApp() {
     );
   }
 
+  const handleMenuClose = () => {
+    setCurrentView('discover');
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Simple Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="max-w-sm mx-auto flex items-center justify-center">
-          <div className="flex items-center gap-3">
-            <Compass className="w-6 h-6 text-blue-600" />
-            <h1 className="text-lg font-bold text-gray-900">Watch Finder</h1>
-          </div>
-        </div>
-      </header>
-
-      {/* Navigation */}
-      <div className="bg-white border-b border-gray-100 px-6 py-3">
-        <div className="max-w-sm mx-auto">
-          <Navigation
-            currentView={currentView}
-            likedCount={getTotalLiked()}
-            onViewChange={handleViewChange}
-          />
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <main className="max-w-sm mx-auto h-[calc(100vh-120px)]">
+    <div 
+      className="fixed inset-0 flex flex-col" 
+      style={{ 
+        backgroundColor: '#bfbabe',
+        minHeight: '-webkit-fill-available',
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+        paddingLeft: 'env(safe-area-inset-left)',
+        paddingRight: 'env(safe-area-inset-right)',
+        height: '100dvh'
+      }}
+    >
+      {/* Main Content with enhanced container */}
+      <main 
+        className="max-w-sm mx-auto w-full flex-1 overflow-visible px-4"
+        style={{
+          height: 'calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom))',
+          maxHeight: '-webkit-fill-available'
+        }}
+      >
         <AnimatePresence mode="wait">
           {currentView === 'discover' && (
-            <div className="flex-1 flex flex-col overflow-y-auto">
+            <div className="flex-1 flex flex-col h-full overflow-visible">
               {/* Discovery Section */}
-              <div className="flex-shrink-0">
-                <motion.div className="p-4 h-screen relative bg-gradient-to-br from-gray-900 via-gray-800 to-black">
-                  {/* Header */}
-                  <div className="flex justify-between items-center mb-6">
-                    <div>
-                      <h1 className="text-2xl font-bold text-white">Discover Watches</h1>
-                      <p className="text-gray-400">Swipe right to like, left to pass</p>
-                    </div>
-                    <button
-                      onClick={() => setCurrentView('liked')}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
-                    >
-                      <Heart className="w-4 h-4" />
-                      Liked ({likedWatches.length})
-                    </button>
-                  </div>
-
+              <div className="flex-1 h-full">
+                <motion.div className="h-full relative flex flex-col rounded-2xl">
                   {currentWatches.length > 0 && (
-                    <div className="flex justify-center items-center h-[70vh] relative">
-                      <AnimatePresence mode="wait">
-                        <WatchCard
-                          key={currentWatches[currentIndex].index}
-                          watch={currentWatches[currentIndex]}
-                          onLike={handleLike}
-                          onPass={handlePass}
-                          onShowSeries={handleShowSeries}
-                        />
-                      </AnimatePresence>
+                    <div className="flex justify-center flex-1 overflow-visible pb-8 pt-4">
+                      <div className="w-full max-w-sm h-full relative">
+                        <AnimatePresence mode="popLayout" initial={false}>
+                          <WatchCard
+                            key={currentWatches[currentIndex].index}
+                            watch={currentWatches[currentIndex]}
+                            onLike={handleLike}
+                            onPass={handlePass}
+                            onShowSeries={handleShowSeries}
+                            currentView={currentView}
+                            likedCount={getTotalLiked()}
+                            onViewChange={handleViewChange}
+                            onMenuClose={handleMenuClose}
+                          />
+                        </AnimatePresence>
+                      </div>
                     </div>
                   )}
 
@@ -437,70 +481,91 @@ export default function WatchFinderApp() {
                 </motion.div>
               </div>
 
-              {/* Series View Section */}
-              {seriesView.isVisible && (
-                <div className="flex-shrink-0 bg-gray-900 border-t border-gray-700">
-                  <div className="p-6">
-                    <div className="flex justify-between items-center mb-4">
-                      <h2 className="text-xl font-bold text-white">
-                        {seriesView.seriesName} Series ({seriesView.watches.length} watches)
-                      </h2>
-                      <button
-                        onClick={handleCloseSeriesView}
-                        className="text-gray-400 hover:text-white transition-colors"
-                      >
-                        <X className="w-6 h-6" />
-                      </button>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
-                      {seriesView.watches.map((watch) => (
-                        <div
-                          key={watch.index}
-                          className={`bg-gray-800 rounded-lg p-4 border-2 transition-colors ${
-                            watch.index === seriesView.currentWatchIndex
-                              ? 'border-green-500'
-                              : 'border-gray-700 hover:border-gray-600'
-                          }`}
-                        >
-                          <div className="aspect-square bg-gray-700 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
-                            <Image
-                              src={watch.image_url || '/placeholder-watch.jpg'}
-                              alt={`${watch.brand} ${watch.model}`}
-                              width={200}
-                              height={200}
-                              className="object-contain max-w-full max-h-full"
-                              onError={(e) => {
-                                e.currentTarget.src = '/placeholder-watch.jpg';
-                              }}
-                            />
-                          </div>
-                          
-                          <h3 className="text-white font-semibold text-sm mb-2 line-clamp-2">
-                            {watch.brand} {watch.model}
-                          </h3>
-                          
-                          <div className="space-y-1 text-xs text-gray-300">
-                            <p>Price: <span className="text-green-400">${watch.price?.toLocaleString()}</span></p>
-                            <p>Movement: {watch.specs?.movement || 'N/A'}</p>
-                            <p>Case: {watch.specs?.case_material || 'N/A'}</p>
-                          </div>
-                          
-                          <div className="flex gap-2 mt-3">
-                            <button
-                              onClick={() => handleLikeFromSeries(watch)}
-                              className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-3 rounded text-xs transition-colors flex items-center justify-center gap-1"
-                            >
-                              <Heart className="w-3 h-3" />
-                              Like
-                            </button>
-                          </div>
+              {/* Series View Section - Now an Overlay */}
+              <AnimatePresence>
+                {seriesView.isVisible && (
+                  <motion.div
+                    className="fixed inset-0 z-40 bg-black/70 backdrop-blur-md flex items-center justify-center p-4"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                  >
+                    <motion.div 
+                      className="border shadow-2xl rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
+                      style={{ backgroundColor: '#f1f2f0', borderColor: '#bfbabe' }}
+                      initial={{ scale: 0.9, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.9, opacity: 0 }}
+                      transition={{ type: "spring", damping: 20, stiffness: 150 }}
+                    >
+                      <div className="p-6 flex-shrink-0 border-b" style={{ borderColor: '#bfbabe', backgroundColor: '#558a86' }}>
+                        <div className="flex justify-between items-center">
+                          <h2 className="text-xl font-bold text-white">
+                            {seriesView.seriesName} Series ({seriesView.watches.length} watches)
+                          </h2>
+                          <button
+                            onClick={handleCloseSeriesView}
+                            className="text-white hover:text-white/80 transition-colors p-2 rounded-full hover:bg-white/20"
+                          >
+                            <X className="w-6 h-6" />
+                          </button>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
+                      </div>
+                      
+                      <div className="p-6 flex-1 overflow-y-auto overscroll-behavior-y-contain">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {seriesView.watches.map((watch) => (
+                            <div
+                              key={watch.index}
+                              className={`rounded-xl p-4 border-2 transition-colors shadow-lg ${
+                                watch.index === seriesView.currentWatchIndex
+                                  ? ''
+                                  : 'hover:opacity-80'
+                              }`}
+                              style={{ 
+                                backgroundColor: '#f1f2f0', 
+                                borderColor: watch.index === seriesView.currentWatchIndex ? '#37bbe4' : '#e1e0dd'
+                              }}
+                            >
+                              <div className="aspect-square rounded-lg mb-3 flex items-center justify-center overflow-hidden" style={{ backgroundColor: '#e1e0dd' }}>
+                                <Image
+                                  src={watch.image_url || '/placeholder-watch.jpg'}
+                                  alt={`${watch.brand} ${watch.model}`}
+                                  width={200}
+                                  height={200}
+                                  className="object-contain max-w-full max-h-full"
+                                  onError={(e) => {
+                                    e.currentTarget.src = '/placeholder-watch.jpg';
+                                  }}
+                                />
+                              </div>
+                              
+                              <h3 className="font-semibold text-sm mb-2 line-clamp-2" style={{ color: '#35342f' }}>
+                                {watch.brand} {watch.model}
+                              </h3>
+                              
+                              <div className="space-y-1 text-xs mb-3" style={{ color: '#35342f' }}>
+                                <p>Price: <span style={{ color: '#37bbe4' }}>${watch.price?.toLocaleString()}</span></p>
+                                <p>Movement: {watch.specs?.movement || 'N/A'}</p>
+                                <p>Case: {watch.specs?.case_material || 'N/A'}</p>
+                              </div>
+                              
+                              <button
+                                onClick={() => handleLikeFromSeries(watch)}
+                                className="w-full text-white py-2 px-3 rounded-lg text-xs transition-colors flex items-center justify-center gap-1 shadow-md hover:opacity-80"
+                                style={{ backgroundColor: '#37bbe4' }}
+                              >
+                                <Heart className="w-3 h-3" />
+                                Like
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           )}
           
@@ -539,14 +604,14 @@ export default function WatchFinderApp() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <div className="bg-white rounded-xl p-6 text-center shadow-lg">
+            <div className="rounded-xl p-6 text-center shadow-lg" style={{ backgroundColor: '#f1f2f0' }}>
               <motion.div
                 animate={{ rotate: 360 }}
                 transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
               >
-                <Compass className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+                <Compass className="w-8 h-8 mx-auto mb-2" style={{ color: '#558a86' }} />
               </motion.div>
-              <p className="text-gray-600">Loading...</p>
+              <p style={{ color: '#35342f' }}>Loading...</p>
             </div>
           </motion.div>
         )}

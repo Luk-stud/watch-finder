@@ -14,6 +14,9 @@ const nextConfig = {
     ],
   },
   // Remove rewrites for static export
+  devIndicators: {
+    allowedDevOrigins: ["http://localhost:3000", "http://192.168.0.209:3000"],
+  }
 };
 
 module.exports = nextConfig; 

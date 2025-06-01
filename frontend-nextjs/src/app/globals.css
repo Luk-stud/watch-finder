@@ -1,14 +1,19 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 @layer base {
+  html, body {
+    height: 100%; /* Ensure html and body take full height */
+    overflow: hidden; /* Prevent scrolling on the body/html */
+  }
   html {
     font-family: 'Inter', system-ui, sans-serif;
+    overscroll-behavior-y: contain; /* Attempt to prevent pull-to-refresh globally */
   }
   
   body {
     @apply antialiased;
+    position: fixed; /* Further attempt to lock body position */
+    width: 100%;
   }
 }
 

@@ -132,8 +132,8 @@ export default function SeriesModal({
                         alt={`${watch.specs?.brand} ${watch.specs?.model}`}
                         width={200}
                         height={128}
-                        className="object-contain"
-                        sizes="200px"
+                        className="object-contain max-w-full max-h-full w-full h-full"
+                        sizes="(max-width: 640px) 150px, 200px"
                       />
                     </div>
 
