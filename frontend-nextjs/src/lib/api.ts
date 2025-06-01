@@ -125,7 +125,7 @@ export class ApiService {
       throw new Error('No active session. Please start a new session.');
     }
 
-    return this.request(`/get-series?session_id=${this.sessionId}&watch_index=${watchIndex}`);
+    return this.request(`/get-series?session_id=${this.sessionId}&index=${watchIndex}`);
   }
 
   async addFeedback(
