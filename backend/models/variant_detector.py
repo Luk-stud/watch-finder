@@ -61,7 +61,7 @@ class WatchVariantDetector:
                 for watch_idx in variant_group:
                     self.watch_to_group[watch_idx] = group_id
                 
-                print(f"Variant group {group_id}: {len(variant_group)} variants of {self.watch_data[representative]['brand']} {self._get_base_model_name(self.watch_data[representative]['model'])}")
+                print(f"Variant group {group_id}: {len(variant_group)} variants of {self.watch_data[representative]['brand']} {self._get_base_model_name(self.watch_data[representative].get('model', self.watch_data[representative].get('model_name', '')))}")
                 group_id += 1
             else:
                 # Single watch, no variants
@@ -97,8 +97,8 @@ class WatchVariantDetector:
     def _calculate_text_similarity(self, watch_a: Dict, watch_b: Dict) -> float:
         """Calculate text similarity between two watches."""
         # Get base model names (remove color/size variants)
-        base_a = self._get_base_model_name(watch_a.get('model', ''))
-        base_b = self._get_base_model_name(watch_b.get('model', ''))
+        base_a = self._get_base_model_name(watch_a.get('model', watch_a.get('model_name', '')))
+        base_b = self._get_base_model_name(watch_b.get('model', watch_b.get('model_name', '')))
         
         if not base_a or not base_b:
             return 0.0
@@ -146,7 +146,7 @@ class WatchVariantDetector:
                 score += 5
             
             # Prefer watches with specific model names (not empty or generic)
-            model_name = watch.get('model', '')
+            model_name = watch.get('model', watch.get('model_name', ''))
             if len(model_name) > 5 and model_name.lower() not in ['-', 'n/a', 'unknown']:
                 score += 5
             
@@ -251,7 +251,7 @@ class WatchVariantDetector:
         variant_groups = len(self.variant_groups)
         print(f"Found {variant_groups} variant groups:")
         for i, (representative, variants) in enumerate(list(self.variant_groups.items())[:5]):  # Show first 5
-            print(f"  Group {i+1}: {self.watch_data[representative]['brand']} {self._get_base_model_name(self.watch_data[representative]['model'])}")
+            print(f"  Group {i+1}: {self.watch_data[representative]['brand']} {self._get_base_model_name(self.watch_data[representative].get('model', self.watch_data[representative].get('model_name', '')))}")
             print(f"    Variants: {len(variants)} watches")
 
     def are_variants(self, watch_a: Dict, watch_b: Dict) -> bool:
@@ -261,8 +261,8 @@ class WatchVariantDetector:
             return False
         
         # Skip if either has missing/invalid model name
-        base_a = self._get_base_model_name(watch_a.get('model', ''))
-        base_b = self._get_base_model_name(watch_b.get('model', ''))
+        base_a = self._get_base_model_name(watch_a.get('model', watch_a.get('model_name', '')))
+        base_b = self._get_base_model_name(watch_b.get('model', watch_b.get('model_name', '')))
         
         if not base_a or not base_b:
             return False
@@ -271,7 +271,7 @@ class WatchVariantDetector:
 
     def has_meaningful_model_name(self, watch: Dict) -> bool:
         """Check if watch has a meaningful model name for variant detection."""
-        model = watch.get('model', '')
+        model = watch.get('model', watch.get('model_name', ''))
         if len(model) > 5 and model.lower() not in ['-', 'n/a', 'unknown']:
             return True
         return False 
