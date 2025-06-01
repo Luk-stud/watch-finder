@@ -125,7 +125,7 @@ export class ApiService {
       throw new Error('No active session. Please start a new session.');
     }
 
-    return this.request(`/get-series?session_id=${this.sessionId}&index=${watchIndex}`);
+    return this.request(`/get-series?session_id=${this.sessionId}&watch_index=${watchIndex}`);
   }
 
   async addFeedback(
@@ -175,6 +175,17 @@ export class ApiService {
     }>;
   }> {
     return this.request('/session-info');
+  }
+
+  async getStats(): Promise<{
+    status: 'success' | 'error';
+    total_watches: number;
+    brands: Record<string, number>;
+    price_ranges: Record<string, number>;
+    embedding_dimension: number;
+    active_sessions: number;
+  }> {
+    return this.request(`/stats`);
   }
 }
 
