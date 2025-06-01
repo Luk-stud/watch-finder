@@ -205,6 +205,16 @@ export default function WatchCard({
         {/* Swipe Indicators */}
         {getSwipeIndicator()}
 
+        {/* Navigation - User Icon for Past Likes & History */}
+        <div className="absolute top-6 right-6 z-30">
+          <Navigation 
+            currentView={currentView}
+            onViewChange={onViewChange}
+            onMenuClose={onMenuClose}
+            likedCount={likedCount}
+          />
+        </div>
+
         {/* Full Image with Overlaid Info */}
         <motion.div 
           className="w-full h-full overflow-hidden relative flex flex-col"
