@@ -150,7 +150,7 @@ export default function WatchFinderApp() {
       setError(null);
       resetState();
 
-      const response = await apiService.startSession(3);
+      const response = await apiService.startSession(7);
       
       if (response.status === 'success') {
         setCurrentWatches(response.seeds);

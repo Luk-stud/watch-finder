@@ -4,7 +4,7 @@ import React from 'react';
 import { useState, useEffect } from 'react';
 import { motion, PanInfo, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
-import { Heart, X, Droplets, Clock, Settings, Diamond, Info, ChevronDown } from 'lucide-react';
+import { Heart, X, Droplets, Clock, Settings, Diamond, Info } from 'lucide-react';
 import type { Watch, ViewType } from '@/types';
 import { formatPrice, getImageUrl } from '@/lib/utils';
 import Navigation from './Navigation';
@@ -342,7 +342,7 @@ export default function WatchCard({
             >
               {/* Modal Header */}
               <div className="text-white p-6 sticky top-0 z-10" style={{ backgroundColor: '#558a86' }}>
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between">
                   <h3 className="text-xl font-bold">Watch Details</h3>
                   <button
                     onClick={() => setShowDetailsOverlay(false)}
@@ -350,10 +350,6 @@ export default function WatchCard({
                   >
                     <X className="w-5 h-5" />
                   </button>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-white/80">
-                  <ChevronDown className="w-4 h-4" />
-                  <span>Swipe down to close</span>
                 </div>
               </div>
 
