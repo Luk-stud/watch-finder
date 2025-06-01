@@ -26,8 +26,10 @@ class WatchVariantDetector:
         self.hybrid_visual_threshold = 0.75     # Lower visual + high text
         
         print("Initializing variant detection...")
-        self._detect_all_variants()
-        print(f"Detected {len(self.variant_groups)} variant groups")
+        # Temporarily disable expensive variant detection for performance
+        # self._detect_all_variants()
+        print(f"Variant detection disabled for performance - treating each watch as unique")
+        print(f"Loaded {len(watch_data)} watches")
 
     def _detect_all_variants(self):
         """Detect all variant groups in the dataset."""
