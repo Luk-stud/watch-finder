@@ -30,7 +30,23 @@ Thumbs.db
 best_clip_model_description_model.pt
 
 # Data files (use embeddings instead)
-watch_data/*.json
+backend/scraped_watches.json
+backend/scraped_watches_v2.json
+backend/scraped_watches_enhanced.json
+backend/scraped_watches_enhanced_v2.json
+backend/watch_data.json
+backend/watch_data_enhanced.json
+backend/watch_data_enhanced_v2.json
+backend/output.json
+backend/unique_watches_deduplicated.json
+backend/unique_watches_deduplicated_enhanced.json
+backend/image_embeddings/
+backend/enhanced_data/
+# Allow required backend data files for deployment
+!backend/data/watch_embeddings.pkl
+!backend/data/watch_metadata.pkl
+!backend/data/final_scrape.json
+!backend/data/watch_image_embeddings_final_scrape.pkl
 
 # Logs
 *.log
@@ -48,4 +64,5 @@ node_modules/
 
 # Project specific
 embeddings/
+!backend/embeddings/
 *.pt 
