@@ -10,6 +10,13 @@ ENV/
 env.bak/
 venv.bak/
 
+# Environment files
+.env
+.env.local
+.env.production
+.env.staging
+*.env
+
 # Virtual environments
 .venv/
 watch_finder/
