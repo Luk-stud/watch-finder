@@ -1,0 +1,46 @@
+# Environment files
+.env
+.env.local
+.env.production
+.env.staging
+
+# API Keys and secrets
+*.key
+secrets/
+
+# Output files
+output/
+*.npy
+*.pkl
+
+# Intermediate files
+*intermediate*
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/ 
