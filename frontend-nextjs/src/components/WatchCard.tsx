@@ -1,11 +1,12 @@
 'use client';
 
+import React from 'react';
 import { useState } from 'react';
 import { motion, PanInfo } from 'framer-motion';
 import Image from 'next/image';
-import { Heart, X, Droplets, Clock, Settings, Diamond, ExternalLink } from 'lucide-react';
+import { Heart, X, Droplets, Clock, Settings, Diamond } from 'lucide-react';
 import type { Watch } from '@/types';
-import { formatPrice, getPlaceholderImage, getImageUrl } from '@/lib/utils';
+import { formatPrice, getImageUrl } from '@/lib/utils';
 
 interface WatchCardProps {
   watch: Watch;
@@ -202,8 +203,7 @@ export default function WatchCard({ watch, onLike, onPass, isActive = true, onSh
               <div>
                 <span className="text-gray-500">Size:</span>
                 <span className="ml-1 font-medium">
-                  {watch.specs?.diameter_mm || watch.case_diameter}
-                  {watch.specs?.diameter_mm && 'mm'}
+                  {watch.specs?.diameter_mm || watch.case_diameter}mm
                 </span>
               </div>
             </div>
@@ -216,10 +216,7 @@ export default function WatchCard({ watch, onLike, onPass, isActive = true, onSh
               <div>
                 <span className="text-gray-500">WR:</span>
                 <span className="ml-1 font-medium">
-                  {watch.specs?.waterproofing_meters && watch.specs.waterproofing_meters !== '-' 
-                    ? `${watch.specs.waterproofing_meters}m`
-                    : watch.water_resistance
-                  }
+                  {watch.specs?.waterproofing_meters || watch.water_resistance}m
                 </span>
               </div>
             </div>
@@ -231,7 +228,7 @@ export default function WatchCard({ watch, onLike, onPass, isActive = true, onSh
               <Clock className="w-4 h-4 text-orange-400" />
               <div>
                 <span className="text-gray-500">Movement:</span>
-                <span className="ml-1 font-medium">
+                <span className="ml-1 font-medium text-xs">
                   {watch.specs?.movement || watch.movement}
                 </span>
               </div>
@@ -244,7 +241,7 @@ export default function WatchCard({ watch, onLike, onPass, isActive = true, onSh
               <Diamond className="w-4 h-4 text-purple-400" />
               <div>
                 <span className="text-gray-500">Material:</span>
-                <span className="ml-1 font-medium">
+                <span className="ml-1 font-medium text-xs">
                   {watch.specs?.case_material || watch.case_material}
                 </span>
               </div>

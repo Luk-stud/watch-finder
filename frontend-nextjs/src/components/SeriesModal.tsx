@@ -1,11 +1,12 @@
 'use client';
 
+import React from 'react';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { X, Settings, Droplets, Clock, Diamond, Heart, Eye } from 'lucide-react';
 import type { Watch } from '@/types';
-import { formatPrice, getPlaceholderImage, getImageUrl } from '@/lib/utils';
+import { formatPrice, getImageUrl } from '@/lib/utils';
 
 interface SeriesModalProps {
   isOpen: boolean;

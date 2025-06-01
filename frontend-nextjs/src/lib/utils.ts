@@ -51,6 +51,7 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
 /**
  * Get image URL - now uses external CDN URLs directly from the data
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getLocalImagePath(watch: any): string {
   // Use external CDN URL directly from main_image field
   const imageUrl = watch?.main_image || watch?.specs?.main_image || watch?.image_url;
@@ -65,6 +66,7 @@ export function getLocalImagePath(watch: any): string {
 /**
  * Get image URL - now uses local images first, falls back to external
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getImageUrl(watch: any): string {
   // Always try local images first
   const localPath = getLocalImagePath(watch);
