@@ -49,32 +49,38 @@ logger = logging.getLogger(__name__)
 # Initialize Flask app with modern configuration
 app = Flask(__name__)
 
-# Enhanced CORS configuration for development
+# Enhanced CORS configuration for development and production
 CORS(app, 
      origins=[
          'http://localhost:3000', 
          'http://localhost:3001', 
          'http://localhost:8080',
-         'http://localhost:8081',  # Add port 8081
+         'http://localhost:8081',
          'http://127.0.0.1:3000', 
          'http://127.0.0.1:3001',
          'http://127.0.0.1:8080',
-         'http://127.0.0.1:8081',  # Add port 8081
+         'http://127.0.0.1:8081',
          'http://192.168.0.209:3000',
          'http://192.168.0.209:3001', 
-         'http://192.168.0.209:8080',  # Frontend is running on 8080
-         'http://192.168.0.209:8081',  # Add port 8081 for current session
-         'http://192.168.0.209:5173',  # Vite default port
-         'http://192.168.0.209:4173',  # Vite preview port
+         'http://192.168.0.209:8080',
+         'http://192.168.0.209:8081',
+         'http://192.168.0.209:5173',
+         'http://192.168.0.209:4173',
+         'https://watchrecomender.netlify.app',  # Production Netlify domain
+         'https://watch-finder.netlify.app',     # Alternative Netlify domain
+         'https://watch-recommender.netlify.app', # Another possible Netlify domain
+         '*'  # Allow all origins temporarily to debug
      ],
      methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
      allow_headers=['Content-Type', 'Authorization'],
      supports_credentials=True
 )
 
-# Global variables
+# Global variables and async event loop
 session_manager: Optional[ModernSessionManager] = None
 app_start_time = time.time()
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
 
 def get_project_root():
     """Get the project root directory."""
@@ -415,22 +421,13 @@ def add_feedback():
                 'message': 'feedback_type must be "like" or "dislike"'
             }), 400
         
-        # Add feedback asynchronously
-        async def add_feedback_async():
-            return await session_manager.add_feedback(
-                session_id=session_id,
-                watch_index=watch_index,
-                feedback_type=feedback_type,
-                confidence=confidence
-            )
-        
-        # Run async operation
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            success = loop.run_until_complete(add_feedback_async())
-        finally:
-            loop.close()
+        # Add feedback synchronously for now to avoid event loop issues
+        success = session_manager.add_feedback_sync(
+            session_id=session_id,
+            watch_index=watch_index,
+            feedback_type=feedback_type,
+            confidence=confidence
+        )
         
         if success:
             logger.info(f"👍 Added {feedback_type} feedback for watch {watch_index} in session {session_id}")
@@ -447,6 +444,7 @@ def add_feedback():
             
     except Exception as e:
         logger.error(f"Error adding feedback: {e}")
+        logger.error(traceback.format_exc())  # Add full traceback
         return jsonify({
             'status': 'error',
             'message': f'Failed to add feedback: {str(e)}'

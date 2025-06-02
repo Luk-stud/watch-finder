@@ -636,4 +636,53 @@ class ModernSessionManager:
             except Exception as e:
                 logger.error(f"❌ Failed to save analytics backup: {e}")
         
-        logger.info("✅ Session Manager shutdown complete") 
+        logger.info("✅ Session Manager shutdown complete")
+
+    def add_feedback_sync(self, 
+                      session_id: str, 
+                      watch_index: int, 
+                      feedback_type: str,
+                      confidence: float = 0.8) -> bool:
+        """
+        Synchronous version of add_feedback for better compatibility with Flask.
+        
+        Args:
+            session_id: Session ID
+            watch_index: Index of the watch
+            feedback_type: 'like' or 'dislike'
+            confidence: Feedback confidence score
+            
+        Returns:
+            bool: True if feedback was added successfully
+        """
+        try:
+            # Validate session
+            if not self._validate_session(session_id):
+                logger.warning(f"❌ Invalid session ID: {session_id}")
+                return False
+            
+            # Get session
+            with self.session_lock:
+                session = self.sessions[session_id]
+                
+                # Add feedback to session state
+                session.add_feedback(watch_index, feedback_type)
+                
+                # Update global metrics
+                self.global_metrics['total_user_interactions'] += 1
+                
+                # Update watch popularity
+                if feedback_type == 'like':
+                    self.popular_watches[watch_index] += 1
+                
+                # Invalidate session cache
+                self._invalidate_session_cache(session_id)
+                
+                # Log feedback
+                logger.info(f"✅ Added {feedback_type} feedback for watch {watch_index} in session {session_id}")
+                
+                return True
+                
+        except Exception as e:
+            logger.error(f"❌ Error adding feedback: {e}")
+            return False 
