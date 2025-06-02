@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "python api/app.py",
+    "startCommand": "python api/modern_app.py",
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 300
   }
