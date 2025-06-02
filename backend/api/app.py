@@ -14,7 +14,8 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 # Add the models directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from models.beam_search import WatchBeamSearch
+# 🆕 Import the new Enhanced Beam Search v2
+from models.beam_search_v2 import EnhancedWatchBeamSearch
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for frontend access
@@ -27,19 +28,26 @@ class SessionManager:
     def __init__(self, base_embeddings, base_watch_data):
         self.base_embeddings = base_embeddings
         self.base_watch_data = base_watch_data
+        
+        # 🚀 PRE-NORMALIZE EMBEDDINGS AT STARTUP (once for all sessions)
+        print("🔧 Pre-normalizing embeddings for all sessions...")
+        self.normalized_embeddings = base_embeddings / np.linalg.norm(base_embeddings, axis=1, keepdims=True)
+        print(f"✅ Pre-normalized {len(base_embeddings)} embeddings at startup")
+        
         self.sessions: Dict[str, Dict[str, Any]] = {}
         self.session_timeout = 3600  # 1 hour timeout
         
     def create_session(self) -> str:
-        """Create a new user session with isolated beam search engine."""
+        """Create a new user session with isolated enhanced beam search engine."""
         session_id = str(uuid.uuid4())
         
-        # Create isolated beam search instance for this session
-        # Use shared embeddings (read-only) and fresh watch data copy
-        session_engine = WatchBeamSearch(
-            embeddings=self.base_embeddings,  # Shared read-only
+        # 🆕 Pass PRE-NORMALIZED embeddings to session engine
+        session_engine = EnhancedWatchBeamSearch(
+            embeddings=self.normalized_embeddings,  # Already normalized!
             watch_data=[watch.copy() for watch in self.base_watch_data],  # Fresh copy
-            beam_width=10
+            initial_beam_width=15,  # Enhanced default
+            max_beam_width=30,
+            embeddings_pre_normalized=True  # Signal that embeddings are already normalized
         )
         
         self.sessions[session_id] = {
@@ -51,8 +59,8 @@ class SessionManager:
         print(f"Created new session: {session_id}")
         return session_id
     
-    def get_session(self, session_id: str) -> WatchBeamSearch:
-        """Get beam search engine for a specific session."""
+    def get_session(self, session_id: str) -> EnhancedWatchBeamSearch:
+        """Get enhanced beam search engine for a specific session."""
         if session_id not in self.sessions:
             raise ValueError(f"Session {session_id} not found")
         
@@ -236,7 +244,7 @@ def start_session():
         session_id = session_manager.create_session()
         beam_search_engine = session_manager.get_session(session_id)
         
-        num_seeds = request.json.get('num_seeds', 3) if request.json else 3
+        num_seeds = request.json.get('num_seeds', 7) if request.json else 7
         print(f"Getting {num_seeds} smart seeds for session {session_id}...")
         
         # Use smart seeds
@@ -263,7 +271,7 @@ def start_session():
 
 @app.route('/api/get-recommendations', methods=['POST'])
 def get_recommendations():
-    """Get watch recommendations based on user feedback with session isolation."""
+    """Get watch recommendations using enhanced multi-modal beam search."""
     try:
         data = request.json
         session_id = data.get('session_id')
@@ -274,17 +282,30 @@ def get_recommendations():
                 'message': 'session_id is required'
             }), 400
         
-        # Get session-specific beam search engine
+        # Get session-specific enhanced beam search engine
         beam_search_engine = session_manager.get_session(session_id)
         
         liked_indices = data.get('liked_indices', [])
         disliked_indices = data.get('disliked_indices', [])
         current_candidates = data.get('current_candidates', [])
         step = data.get('step', 0)
+        num_recommendations = data.get('num_recommendations', 10)
         
         print(f"Processing recommendations for session {session_id} - Step {step}, Likes: {liked_indices}, Dislikes: {disliked_indices}")
         
-        # Add feedback to the session-specific system
+        # 🆕 LOG EXPLORATION STATS BEFORE RECOMMENDATIONS
+        try:
+            exploration_stats = beam_search_engine.get_exploration_stats()
+            print(f"📊 Session {session_id}: {exploration_stats['seen_watches']}/{exploration_stats['total_watches']} watches seen ({exploration_stats['exploration_percentage']:.1f}%)")
+            
+            # Auto-suggest reset if too much explored
+            if exploration_stats['exploration_percentage'] > 80:
+                print(f"⚠️  Session {session_id}: High exploration percentage, may need reset soon")
+        except Exception as stats_error:
+            print(f"Error getting exploration stats for session {session_id}: {stats_error}")
+            exploration_stats = {'exploration_percentage': 0, 'seen_watches': 0, 'total_watches': len(beam_search_engine.watch_data)}
+        
+        # 🆕 Add feedback to the enhanced multi-modal system
         try:
             for idx in liked_indices:
                 beam_search_engine.add_feedback(idx, 'like', confidence=1.0)
@@ -294,60 +315,78 @@ def get_recommendations():
         except Exception as feedback_error:
             print(f"Error adding feedback for session {session_id}: {feedback_error}")
         
-        # Check session-specific exploration stats
+        # 🆕 Get multi-modal recommendations using the enhanced beam search
         try:
-            exploration_stats = beam_search_engine.get_exploration_stats()
-            if exploration_stats['exploration_percentage'] > 60:
-                beam_search_engine.reset_exploration()
-                print(f"Auto-reset exploration for session {session_id} at {exploration_stats['exploration_percentage']:.1f}% coverage")
-        except Exception as exploration_error:
-            print(f"Error checking exploration stats for session {session_id}: {exploration_error}")
-            exploration_stats = {'exploration_percentage': 0, 'seen_watches': 0, 'total_watches': len(beam_search_engine.watch_data)}
-        
-        # Calculate session-specific user preferences
-        try:
-            user_preferences = beam_search_engine.calculate_weighted_user_preference_vector(
-                liked_indices, disliked_indices
-            )
-        except Exception as preference_error:
-            print(f"Error calculating preferences for session {session_id}: {preference_error}")
-            user_preferences = np.zeros(beam_search_engine.dimension)
-        
-        # Get session-specific recommendations
-        try:
-            recommendations = beam_search_engine.beam_search_step(
-                current_candidates, user_preferences, step
-            )
+            if step == 0 and not liked_indices and not disliked_indices:
+                # First step: get smart seeds
+                recommendations = beam_search_engine.get_smart_seeds(num_recommendations)
+                print(f"First step: providing {len(recommendations)} smart seeds")
+            else:
+                # Use multi-modal beam search for subsequent steps
+                recommendations = beam_search_engine.multi_modal_beam_search_step(
+                    current_candidates, liked_indices, disliked_indices, step
+                )
+                print(f"Multi-modal search: provided {len(recommendations)} recommendations")
+                
+            # 🆕 VALIDATE NO DUPLICATES IN RESPONSE
+            seen_indices_in_response = set()
+            unique_recommendations = []
+            for watch in recommendations:
+                watch_idx = watch.get('index')
+                if watch_idx is not None and watch_idx not in seen_indices_in_response:
+                    seen_indices_in_response.add(watch_idx)
+                    unique_recommendations.append(watch)
+                else:
+                    print(f"⚠️  Filtered duplicate in response: watch {watch_idx}")
+            
+            recommendations = unique_recommendations
+            print(f"✅ Final response: {len(recommendations)} unique recommendations for session {session_id}")
+            
         except Exception as beam_error:
-            print(f"Error in beam search step for session {session_id}: {beam_error}")
+            print(f"Error in enhanced beam search for session {session_id}: {beam_error}")
             try:
-                recommendations = beam_search_engine.get_smart_seeds(3)
+                # Fallback to smart seeds
+                recommendations = beam_search_engine.get_smart_seeds(num_recommendations)
                 print(f"Fallback: using smart seeds for session {session_id}")
             except Exception as fallback_error:
                 print(f"Fallback also failed for session {session_id}: {fallback_error}")
                 return jsonify({
                     'status': 'error',
-                    'message': f'Beam search failed: {beam_error}, Fallback failed: {fallback_error}'
+                    'message': f'Enhanced beam search failed: {beam_error}, Fallback failed: {fallback_error}'
                 }), 500
         
-        # Get session-specific metrics
+        # 🆕 Get enhanced performance summary with exploration stats
         try:
-            metrics = beam_search_engine.get_comprehensive_metrics()
+            performance_summary = beam_search_engine.get_performance_summary()
+            preference_modes = beam_search_engine.get_preference_modes_summary()
+            final_exploration_stats = beam_search_engine.get_exploration_stats()
         except Exception as metrics_error:
-            print(f"Error getting metrics for session {session_id}: {metrics_error}")
-            metrics = {'error': 'Failed to calculate metrics'}
+            print(f"Error getting enhanced metrics for session {session_id}: {metrics_error}")
+            performance_summary = {'error': 'Failed to calculate performance metrics'}
+            preference_modes = {'error': 'Failed to get preference modes'}
+            final_exploration_stats = exploration_stats
         
         return jsonify({
             'status': 'success',
             'recommendations': recommendations,
             'step': step + 1,
             'session_id': session_id,
-            'exploration_stats': exploration_stats,
-            'metrics': metrics,
-            'feedback_processed': {
-                'likes': len(liked_indices),
-                'dislikes': len(disliked_indices),
-                'total_feedback_history': len(beam_search_engine.feedback_history)
+            'enhanced_metrics': {
+                'performance_summary': performance_summary,
+                'preference_modes': preference_modes,
+                'exploration_stats': final_exploration_stats,
+                'feedback_processed': {
+                    'likes': len(liked_indices),
+                    'dislikes': len(disliked_indices),
+                    'total_feedback_history': len(beam_search_engine.feedback_history)
+                }
+            },
+            'system_info': {
+                'beam_search_version': 'Enhanced v2',
+                'multi_modal': True,
+                'current_beam_width': beam_search_engine.current_beam_width,
+                'exploration_factor': beam_search_engine.exploration_factor,
+                'duplicate_prevention': 'enabled'
             }
         })
     
@@ -396,10 +435,10 @@ def add_feedback():
                 'message': 'feedback_type must be "like" or "dislike"'
             }), 400
         
-        # Get session-specific beam search engine
+        # Get session-specific enhanced beam search engine
         beam_search_engine = session_manager.get_session(session_id)
         
-        # Add feedback to the session-specific system
+        # Add feedback to the enhanced multi-modal system
         beam_search_engine.add_feedback(watch_index, feedback_type, confidence)
         
         return jsonify({
@@ -409,6 +448,63 @@ def add_feedback():
             'total_feedback': len(beam_search_engine.feedback_history)
         })
     
+    except ValueError as ve:
+        return jsonify({
+            'status': 'error',
+            'message': str(ve),
+            'error_type': 'session_expired'
+        }), 404
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/preference-modes', methods=['GET'])
+def get_preference_modes():
+    """Get detailed information about user's preference modes."""
+    try:
+        session_id = request.args.get('session_id')
+        
+        if not session_id:
+            return jsonify({
+                'status': 'error',
+                'message': 'session_id parameter is required'
+            }), 400
+        
+        # Get session-specific enhanced beam search engine
+        beam_search_engine = session_manager.get_session(session_id)
+        
+        # Get comprehensive preference modes information
+        preference_modes = beam_search_engine.get_preference_modes_summary()
+        performance_summary = beam_search_engine.get_performance_summary()
+        
+        # Get recent feedback for context
+        recent_feedback = list(beam_search_engine.feedback_history)[-10:]
+        
+        return jsonify({
+            'status': 'success',
+            'session_id': session_id,
+            'preference_modes': preference_modes,
+            'performance_summary': performance_summary,
+            'recent_feedback': [
+                {
+                    'watch_index': f['watch_index'],
+                    'type': f['type'],
+                    'confidence': f['confidence'],
+                    'timestamp': f['timestamp'],
+                    'context': f.get('context', {})
+                } for f in recent_feedback
+            ],
+            'system_status': {
+                'total_feedback': len(beam_search_engine.feedback_history),
+                'current_beam_width': beam_search_engine.current_beam_width,
+                'exploration_factor': beam_search_engine.exploration_factor,
+                'objective_weights': beam_search_engine.objective_weights,
+                'user_engagement_level': beam_search_engine.user_profile['engagement_level']
+            }
+        })
+        
     except ValueError as ve:
         return jsonify({
             'status': 'error',
@@ -492,10 +588,11 @@ def get_variant_stats():
             }), 500
         
         # Create a temporary engine to get variant stats (uses base data)
-        temp_engine = WatchBeamSearch(
+        temp_engine = EnhancedWatchBeamSearch(
             embeddings=session_manager.base_embeddings,
             watch_data=session_manager.base_watch_data,
-            beam_width=10
+            initial_beam_width=15,
+            max_beam_width=30
         )
         variant_stats = temp_engine.variant_detector.get_variant_stats()
         
@@ -542,7 +639,8 @@ def get_metrics():
                 'total_watches': len(beam_search_engine.watch_data),
                 'embedding_dimension': beam_search_engine.dimension,
                 'style_clusters': len(beam_search_engine.cluster_to_watches),
-                'beam_width': beam_search_engine.beam_width,
+                'initial_beam_width': beam_search_engine.initial_beam_width,
+                'max_beam_width': beam_search_engine.max_beam_width,
                 'variant_detection': variant_stats
             }
         })
@@ -572,18 +670,63 @@ def reset_session():
                 'message': 'session_id is required'
             }), 400
         
-        # Get session-specific beam search engine
+        # Get session-specific enhanced beam search engine
         beam_search_engine = session_manager.get_session(session_id)
         
-        # Reset only this session's exploration
-        beam_search_engine.reset_exploration()
+        # 🆕 Enhanced reset with seen watches tracking
+        exploration_stats_before = beam_search_engine.get_exploration_stats()
+        beam_search_engine.reset_seen_watches()
+        exploration_stats_after = beam_search_engine.get_exploration_stats()
         
         return jsonify({
             'status': 'success',
             'message': 'Session reset successfully',
-            'session_id': session_id
+            'session_id': session_id,
+            'reset_info': {
+                'watches_seen_before': exploration_stats_before['seen_watches'],
+                'watches_seen_after': exploration_stats_after['seen_watches'],
+                'exploration_percentage_before': exploration_stats_before['exploration_percentage'],
+                'brands_explored_before': exploration_stats_before['brands_explored'],
+                'styles_explored_before': exploration_stats_before['styles_explored']
+            }
         })
     
+    except ValueError as ve:
+        return jsonify({
+            'status': 'error',
+            'message': str(ve),
+            'error_type': 'session_expired'
+        }), 404
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/exploration-stats', methods=['GET'])
+def get_exploration_stats():
+    """Get exploration statistics for the current session."""
+    try:
+        session_id = request.args.get('session_id')
+        
+        if not session_id:
+            return jsonify({
+                'status': 'error',
+                'message': 'session_id parameter is required'
+            }), 400
+        
+        # Get session-specific enhanced beam search engine
+        beam_search_engine = session_manager.get_session(session_id)
+        
+        # Get exploration statistics
+        exploration_stats = beam_search_engine.get_exploration_stats()
+        
+        return jsonify({
+            'status': 'success',
+            'session_id': session_id,
+            'exploration_stats': exploration_stats
+        })
+        
     except ValueError as ve:
         return jsonify({
             'status': 'error',
@@ -750,7 +893,7 @@ def get_stats():
 
 @app.route('/api/session-info', methods=['GET'])
 def get_session_info():
-    """Get information about active sessions (admin endpoint)."""
+    """Get enhanced information about active sessions (admin endpoint)."""
     try:
         if not session_manager:
             return jsonify({
@@ -763,20 +906,39 @@ def get_session_info():
         session_info = []
         for session_id, session_data in session_manager.sessions.items():
             engine = session_data['engine']
+            
+            # Get enhanced metrics
+            try:
+                performance_summary = engine.get_performance_summary()
+                preference_modes = engine.get_preference_modes_summary()
+            except:
+                performance_summary = {'error': 'metrics unavailable'}
+                preference_modes = {'error': 'modes unavailable'}
+            
             session_info.append({
                 'session_id': session_id,
                 'created_at': session_data['created_at'],
                 'last_activity': session_data['last_activity'],
                 'seen_watches': len(engine.seen_watches),
                 'feedback_count': len(engine.feedback_history),
-                'likes': engine.metrics['likes'],
-                'dislikes': engine.metrics['dislikes']
+                'current_beam_width': engine.current_beam_width,
+                'exploration_factor': engine.exploration_factor,
+                'user_engagement_level': engine.user_profile['engagement_level'],
+                'preference_modes_count': len(engine.preference_modes),
+                'performance_summary': performance_summary,
+                'preference_modes': preference_modes
             })
         
         return jsonify({
             'status': 'success',
             'active_sessions': len(session_info),
-            'sessions': session_info
+            'sessions': session_info,
+            'system_info': {
+                'beam_search_version': 'Enhanced v2',
+                'multi_modal_support': True,
+                'total_watches': len(session_manager.base_watch_data),
+                'embedding_dimension': session_manager.base_embeddings.shape[1]
+            }
         })
     
     except Exception as e:

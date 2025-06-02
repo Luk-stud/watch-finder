@@ -47,183 +47,141 @@ def load_watch_data():
     else:
         raise FileNotFoundError(f"Could not find embeddings or metadata files")
 
-def generate_diverse_smart_seeds(beam_search_engine: EnhancedWatchBeamSearch, 
-                                num_seeds: int = 20) -> List[Dict[str, Any]]:
+def generate_diverse_smart_seed_sets(beam_search_engine: EnhancedWatchBeamSearch, 
+                                   num_sets: int = 20, seeds_per_set: int = 7) -> List[List[Dict[str, Any]]]:
     """
-    Generate diverse smart seeds using enhanced clustering and multi-criteria selection.
+    Generate multiple diverse smart seed sets.
+    Each set contains 7 watches with maximum style diversity.
     """
-    print(f"🌱 Generating {num_seeds} diverse smart seeds...")
+    print(f"🌱 Generating {num_sets} sets of {seeds_per_set} diverse smart seeds each...")
     
     # Reset seen watches to start fresh
     beam_search_engine.seen_watches.clear()
     beam_search_engine.seen_brands.clear()
     beam_search_engine.seen_styles.clear()
     
-    seeds = []
-    selected_indices = set()
+    # 🆕 ENSURE CLUSTERS ARE INITIALIZED
+    print("⏳ Ensuring clusters are initialized...")
+    beam_search_engine._ensure_clusters()
+    beam_search_engine._ensure_semantic_features()
     
-    # Strategy 1: Select from different aesthetic clusters (40% of seeds)
-    aesthetic_seeds = int(num_seeds * 0.4)
+    all_seed_sets = []
+    global_selected_indices = set()  # Track globally selected indices across all sets
+    
+    # Get available clusters and styles for diverse selection
     available_aesthetic_clusters = list(beam_search_engine.cluster_mappings['aesthetic'].keys())
-    
-    print(f"📊 Selecting {aesthetic_seeds} seeds from aesthetic clusters...")
-    for i in range(aesthetic_seeds):
-        if not available_aesthetic_clusters:
-            break
-            
-        cluster_id = random.choice(available_aesthetic_clusters)
-        available_aesthetic_clusters.remove(cluster_id)
-        
-        cluster_watches = beam_search_engine.cluster_mappings['aesthetic'][cluster_id]
-        available_watches = [idx for idx in cluster_watches if idx not in selected_indices]
-        
-        if available_watches:
-            # Select best representative from this cluster
-            neutral_preferences = np.mean(beam_search_engine.normalized_embeddings, axis=0)
-            best_watch = None
-            best_score = -1
-            
-            for watch_idx in available_watches:
-                score = beam_search_engine.multi_objective_score(watch_idx, neutral_preferences, [])
-                if score > best_score:
-                    best_score = score
-                    best_watch = watch_idx
-            
-            if best_watch is not None:
-                seeds.append(best_watch)
-                selected_indices.add(best_watch)
-                print(f"   ✓ Aesthetic cluster {cluster_id}: watch {best_watch}")
-    
-    # Strategy 2: Select from different style clusters (30% of seeds)
-    style_seeds = int(num_seeds * 0.3)
     available_style_clusters = list(beam_search_engine.cluster_mappings['style'].keys())
     
-    print(f"🎨 Selecting {style_seeds} seeds from style clusters...")
-    for i in range(style_seeds):
-        if not available_style_clusters:
-            break
+    # Get all unique styles in the dataset
+    all_styles = set()
+    for watch in beam_search_engine.watch_data:
+        style = beam_search_engine._classify_watch_style_enhanced(watch)
+        all_styles.add(style)
+    
+    all_styles = list(all_styles)
+    print(f"📊 Available styles: {all_styles}")
+    
+    for set_idx in range(num_sets):
+        print(f"\n🎯 Generating seed set {set_idx + 1}/{num_sets}...")
+        
+        seed_set = []
+        set_selected_indices = set()
+        set_styles_used = set()
+        
+        # Strategy: Ensure style diversity within each set
+        target_styles = all_styles.copy()
+        random.shuffle(target_styles)
+        
+        # Select up to seeds_per_set watches, prioritizing style diversity
+        for style_priority in range(seeds_per_set):
+            best_watch = None
+            best_score = -1
+            best_style = None
             
-        cluster_id = random.choice(available_style_clusters)
-        available_style_clusters.remove(cluster_id)
-        
-        cluster_watches = beam_search_engine.cluster_mappings['style'][cluster_id]
-        available_watches = [idx for idx in cluster_watches if idx not in selected_indices]
-        
-        if available_watches:
-            selected_watch = random.choice(available_watches)
-            seeds.append(selected_watch)
-            selected_indices.add(selected_watch)
-            print(f"   ✓ Style cluster {cluster_id}: watch {selected_watch}")
-    
-    # Strategy 3: Select from different brand categories (20% of seeds)
-    brand_seeds = int(num_seeds * 0.2)
-    brand_categories = ['luxury', 'premium', 'accessible', 'independent']
-    
-    print(f"🏭 Selecting {brand_seeds} seeds from brand categories...")
-    for category in brand_categories:
-        if len(seeds) >= num_seeds:
-            break
-            
-        # Find watches from this brand category
-        category_watches = []
-        for idx, watch in enumerate(beam_search_engine.watch_data):
-            if idx not in selected_indices:
-                brand = watch.get('brand', '').lower()
-                watch_category = beam_search_engine._categorize_brand(brand)
-                if watch_category == category:
-                    category_watches.append(idx)
-        
-        if category_watches:
-            selected_watch = random.choice(category_watches)
-            seeds.append(selected_watch)
-            selected_indices.add(selected_watch)
-            print(f"   ✓ Brand category {category}: watch {selected_watch}")
-    
-    # Strategy 4: Fill remaining with random diverse selection (10% of seeds)
-    remaining_seeds = num_seeds - len(seeds)
-    
-    if remaining_seeds > 0:
-        print(f"🎲 Selecting {remaining_seeds} random diverse seeds...")
-        
-        # Get all unseen watches
-        all_unseen = [idx for idx in range(len(beam_search_engine.watch_data)) 
-                     if idx not in selected_indices]
-        
-        # Use similarity-based diversity selection
-        for _ in range(remaining_seeds):
-            if not all_unseen:
-                break
+            # Try to get a watch from an unused style first
+            for target_style in target_styles:
+                if target_style in set_styles_used:
+                    continue  # Skip already used styles in this set
                 
-            if not seeds:
-                # First random seed
-                selected_watch = random.choice(all_unseen)
-            else:
-                # Select watch that is most different from already selected
-                best_watch = None
-                best_diversity = -1
+                # Find watches of this style that haven't been globally selected
+                style_candidates = []
+                for idx, watch in enumerate(beam_search_engine.watch_data):
+                    if idx in global_selected_indices or idx in set_selected_indices:
+                        continue
+                    
+                    watch_style = beam_search_engine._classify_watch_style_enhanced(watch)
+                    if watch_style == target_style:
+                        style_candidates.append(idx)
                 
-                for candidate_idx in random.sample(all_unseen, min(50, len(all_unseen))):
-                    # Calculate average similarity to already selected seeds
-                    similarities = []
-                    for seed_idx in seeds:
-                        sim = np.dot(beam_search_engine.normalized_embeddings[candidate_idx],
-                                   beam_search_engine.normalized_embeddings[seed_idx])
-                        similarities.append(sim)
+                if not style_candidates:
+                    continue
+                
+                # Select best candidate from this style using multi-objective scoring
+                neutral_preferences = np.mean(beam_search_engine.normalized_embeddings, axis=0)
+                
+                for candidate_idx in style_candidates:
+                    score = beam_search_engine.multi_objective_score(candidate_idx, neutral_preferences, list(set_selected_indices))
                     
-                    diversity = 1.0 - np.mean(similarities)  # Higher = more diverse
-                    
-                    if diversity > best_diversity:
-                        best_diversity = diversity
+                    if score > best_score:
+                        best_score = score
                         best_watch = candidate_idx
+                        best_style = target_style
                 
-                selected_watch = best_watch if best_watch is not None else random.choice(all_unseen)
+                if best_watch is not None:
+                    break  # Found a good watch from an unused style
             
-            seeds.append(selected_watch)
-            selected_indices.add(selected_watch)
-            all_unseen.remove(selected_watch)
-            print(f"   ✓ Random diverse: watch {selected_watch}")
+            # If no unused style available, pick best remaining watch
+            if best_watch is None:
+                remaining_candidates = [idx for idx in range(len(beam_search_engine.watch_data)) 
+                                      if idx not in global_selected_indices and idx not in set_selected_indices]
+                
+                if not remaining_candidates:
+                    print(f"⚠️  Running out of candidates at seed set {set_idx + 1}, seed {len(seed_set) + 1}")
+                    break
+                
+                neutral_preferences = np.mean(beam_search_engine.normalized_embeddings, axis=0)
+                
+                for candidate_idx in random.sample(remaining_candidates, min(50, len(remaining_candidates))):
+                    score = beam_search_engine.multi_objective_score(candidate_idx, neutral_preferences, list(set_selected_indices))
+                    
+                    if score > best_score:
+                        best_score = score
+                        best_watch = candidate_idx
+                        best_style = beam_search_engine._classify_watch_style_enhanced(beam_search_engine.watch_data[candidate_idx])
+            
+            if best_watch is not None:
+                watch = beam_search_engine.watch_data[best_watch].copy()
+                watch['index'] = best_watch
+                watch['seed_set_id'] = set_idx
+                watch['seed_position'] = len(seed_set)
+                watch['seed_style'] = best_style
+                watch['is_precomputed_seed'] = True
+                
+                # Add enhanced metadata
+                watch['brand_category'] = beam_search_engine._categorize_brand(watch.get('brand', '').lower())
+                watch['style'] = best_style
+                watch['luxury_level'] = beam_search_engine._assess_luxury_level(watch)
+                
+                seed_set.append(watch)
+                set_selected_indices.add(best_watch)
+                global_selected_indices.add(best_watch)
+                set_styles_used.add(best_style)
+                
+                print(f"   ✓ Seed {len(seed_set)}: {watch.get('brand')} {watch.get('model')} ({best_style})")
+        
+        if len(seed_set) > 0:
+            all_seed_sets.append(seed_set)
+            print(f"✅ Set {set_idx + 1}: {len(seed_set)} seeds with {len(set_styles_used)} unique styles")
+        else:
+            print(f"❌ Failed to generate seed set {set_idx + 1}")
     
-    # Convert to watch objects with metadata
-    seed_watches = []
-    for i, idx in enumerate(seeds):
-        if 0 <= idx < len(beam_search_engine.watch_data):
-            watch = beam_search_engine.watch_data[idx].copy()
-            watch['index'] = idx
-            watch['seed_id'] = i
-            watch['seed_strategy'] = _get_seed_strategy(i, num_seeds)
-            watch['is_precomputed_seed'] = True
-            
-            # Add enhanced metadata
-            watch['brand_category'] = beam_search_engine._categorize_brand(watch.get('brand', '').lower())
-            watch['style'] = beam_search_engine._classify_watch_style_enhanced(watch)
-            watch['luxury_level'] = beam_search_engine._assess_luxury_level(watch)
-            
-            if idx in beam_search_engine.semantic_features:
-                watch['aesthetic_keywords'] = beam_search_engine.semantic_features[idx]['aesthetic_keywords']
-            
-            seed_watches.append(watch)
-    
-    print(f"✅ Generated {len(seed_watches)} diverse smart seeds")
-    return seed_watches
+    print(f"\n🎉 Generated {len(all_seed_sets)} complete seed sets")
+    return all_seed_sets
 
-def _get_seed_strategy(index: int, total: int) -> str:
-    """Get the strategy used to select this seed."""
-    aesthetic_cutoff = int(total * 0.4)
-    style_cutoff = aesthetic_cutoff + int(total * 0.3)
-    brand_cutoff = style_cutoff + int(total * 0.2)
-    
-    if index < aesthetic_cutoff:
-        return 'aesthetic_cluster'
-    elif index < style_cutoff:
-        return 'style_cluster'
-    elif index < brand_cutoff:
-        return 'brand_category'
-    else:
-        return 'random_diverse'
-
-def analyze_seed_diversity(seed_watches: List[Dict[str, Any]]):
+def analyze_seed_diversity(seed_watches: List[Dict[str, Any]], set_id: int = None):
     """Analyze and report on the diversity of generated seeds."""
-    print("\n📊 Seed Diversity Analysis:")
+    set_prefix = f"Set {set_id} " if set_id is not None else ""
+    print(f"\n📊 {set_prefix}Seed Diversity Analysis:")
     
     # Brand diversity
     brands = [watch.get('brand') for watch in seed_watches]
@@ -250,42 +208,39 @@ def analyze_seed_diversity(seed_watches: List[Dict[str, Any]]):
     if prices:
         print(f"   💵 Price Range: ${min(prices):.0f} - ${max(prices):.0f} (avg: ${np.mean(prices):.0f})")
     
-    # Strategy distribution
-    strategies = [watch.get('seed_strategy') for watch in seed_watches]
-    strategy_counts = {}
-    for strategy in strategies:
-        strategy_counts[strategy] = strategy_counts.get(strategy, 0) + 1
+    print(f"   🎯 Diversity Score: {(unique_brands + unique_styles + unique_categories)/3:.1f}/{len(seed_watches)}")
     
-    print(f"   🎯 Strategy Distribution:")
-    for strategy, count in strategy_counts.items():
-        print(f"      - {strategy}: {count} seeds")
-    
-    print(f"\n✅ Diversity Score: {(unique_brands + unique_styles + unique_categories)/3:.1f}/20")
+    # Show the styles represented
+    style_list = list(set(styles))
+    print(f"   📋 Styles: {', '.join(style_list)}")
 
-def save_smart_seeds(seed_watches: List[Dict[str, Any]], 
-                    output_path: str = 'data/precomputed_smart_seeds.pkl'):
-    """Save precomputed smart seeds to file."""
+def save_smart_seed_sets(seed_sets: List[List[Dict[str, Any]]], 
+                        output_path: str = 'data/precomputed_smart_seed_sets.pkl'):
+    """Save all precomputed smart seed sets to file."""
     
     # Create output directory if it doesn't exist
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
     # Prepare data structure
     seeds_data = {
-        'seeds': seed_watches,
+        'seed_sets': seed_sets,
         'generation_timestamp': np.datetime64('now').item().timestamp(),
-        'total_seeds': len(seed_watches),
-        'version': 'v1.0',
+        'num_sets': len(seed_sets),
+        'seeds_per_set': len(seed_sets[0]) if seed_sets else 0,
+        'total_seeds': sum(len(s) for s in seed_sets),
+        'version': 'v2.0_multiple_sets',
         'metadata': {
-            'generation_method': 'enhanced_clustering_v2',
-            'strategies': ['aesthetic_cluster', 'style_cluster', 'brand_category', 'random_diverse'],
-            'diversity_optimized': True
+            'generation_method': 'style_diverse_sets',
+            'strategy': 'maximize_style_diversity_per_set',
+            'diversity_optimized': True,
+            'set_based': True
         }
     }
     
     with open(output_path, 'wb') as f:
         pickle.dump(seeds_data, f)
     
-    print(f"💾 Saved {len(seed_watches)} smart seeds to: {output_path}")
+    print(f"💾 Saved {len(seed_sets)} seed sets ({seeds_data['total_seeds']} total seeds) to: {output_path}")
     
     # Also save as JSON for readability
     json_path = output_path.replace('.pkl', '.json')
@@ -293,18 +248,22 @@ def save_smart_seeds(seed_watches: List[Dict[str, Any]],
     
     # Convert for JSON serialization
     json_data = seeds_data.copy()
-    json_data['seeds'] = [
-        {
-            'index': seed['index'],
-            'brand': seed.get('brand'),
-            'model': seed.get('model'),
-            'style': seed.get('style'),
-            'brand_category': seed.get('brand_category'),
-            'price': seed.get('price'),
-            'seed_strategy': seed.get('seed_strategy'),
-            'aesthetic_keywords': seed.get('aesthetic_keywords', [])
-        }
-        for seed in seed_watches
+    json_data['seed_sets'] = [
+        [
+            {
+                'index': seed['index'],
+                'brand': seed.get('brand'),
+                'model': seed.get('model'),
+                'style': seed.get('style'),
+                'brand_category': seed.get('brand_category'),
+                'price': seed.get('price'),
+                'seed_set_id': seed.get('seed_set_id'),
+                'seed_position': seed.get('seed_position'),
+                'seed_style': seed.get('seed_style')
+            }
+            for seed in seed_set
+        ]
+        for seed_set in seed_sets
     ]
     
     with open(json_path, 'w') as f:
@@ -313,8 +272,8 @@ def save_smart_seeds(seed_watches: List[Dict[str, Any]],
     print(f"📄 Also saved readable version to: {json_path}")
 
 def main():
-    """Main function to generate and save precomputed smart seeds."""
-    print("🚀 Precomputing Smart Seeds for Watch Recommendation System")
+    """Main function to generate and save precomputed smart seed sets."""
+    print("🚀 Precomputing Smart Seed Sets for Watch Recommendation System")
     print("=" * 60)
     
     try:
@@ -330,19 +289,33 @@ def main():
             max_beam_width=30
         )
         
-        # Generate smart seeds
-        print("\n🌱 Generating Smart Seeds...")
-        seed_watches = generate_diverse_smart_seeds(beam_search_engine, num_seeds=20)
+        # Generate smart seed sets
+        print("\n🌱 Generating Smart Seed Sets...")
+        seed_sets = generate_diverse_smart_seed_sets(beam_search_engine, num_sets=20, seeds_per_set=7)
         
-        # Analyze diversity
-        analyze_seed_diversity(seed_watches)
+        # Analyze diversity for each set
+        print("\n📊 Analyzing Diversity for Each Set...")
+        for set_idx, seed_set in enumerate(seed_sets):
+            analyze_seed_diversity(seed_set, set_id=set_idx + 1)
         
-        # Save seeds
-        print("\n💾 Saving Smart Seeds...")
-        save_smart_seeds(seed_watches)
+        # Save all seed sets
+        print("\n💾 Saving Smart Seed Sets...")
+        save_smart_seed_sets(seed_sets)
         
-        print("\n🎉 Smart Seeds Generation Complete!")
-        print("The precomputed seeds are ready for use in the recommendation system.")
+        # Summary statistics
+        total_seeds = sum(len(s) for s in seed_sets)
+        all_brands = set()
+        all_styles = set()
+        for seed_set in seed_sets:
+            for seed in seed_set:
+                all_brands.add(seed.get('brand'))
+                all_styles.add(seed.get('style'))
+        
+        print(f"\n🎉 Smart Seed Sets Generation Complete!")
+        print(f"📊 Generated {len(seed_sets)} sets with {total_seeds} total seeds")
+        print(f"🏭 Unique brands across all sets: {len(all_brands)}")
+        print(f"🎨 Unique styles across all sets: {len(all_styles)}")
+        print("The precomputed seed sets are ready for use in the recommendation system.")
         
     except Exception as e:
         print(f"❌ Error: {e}")

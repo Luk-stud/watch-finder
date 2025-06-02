@@ -28,7 +28,8 @@ from variant_detector import WatchVariantDetector
 
 class EnhancedWatchBeamSearch:
     def __init__(self, embeddings: np.ndarray, watch_data: List[Dict[str, Any]], 
-                 initial_beam_width: int = 15, max_beam_width: int = 30):
+                 initial_beam_width: int = 15, max_beam_width: int = 30,
+                 embeddings_pre_normalized: bool = False):
         """
         Enhanced beam search with multi-objective optimization and multi-modal preference handling.
         Optimized initialization - expensive operations are lazy-loaded when needed.
@@ -38,6 +39,7 @@ class EnhancedWatchBeamSearch:
             watch_data: Watch metadata with AI descriptions
             initial_beam_width: Starting beam width
             max_beam_width: Maximum adaptive beam width
+            embeddings_pre_normalized: If True, embeddings are already normalized (skip normalization)
         """
         self.embeddings = embeddings
         self.watch_data = watch_data
@@ -51,9 +53,16 @@ class EnhancedWatchBeamSearch:
         self.seen_brands = set()
         self.seen_styles = set()
         
-        # Normalize embeddings for cosine similarity (quick operation)
+        # 🚀 OPTIMIZED EMBEDDING NORMALIZATION
         self.dimension = embeddings.shape[1]
-        self.normalized_embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
+        if embeddings_pre_normalized:
+            # Embeddings already normalized at server startup - just use them!
+            self.normalized_embeddings = embeddings
+            print("⚡ Using pre-normalized embeddings (server startup optimization)")
+        else:
+            # Fallback: normalize embeddings (for backward compatibility)
+            self.normalized_embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
+            print("🔧 Normalized embeddings during session creation (consider pre-normalizing at startup)")
         
         # Multi-objective weights (dynamically adjusted based on user behavior)
         self.objective_weights = {
@@ -628,61 +637,87 @@ class EnhancedWatchBeamSearch:
         }
 
     def _load_precomputed_smart_seeds(self):
-        """Load precomputed smart seeds from file."""
+        """Load precomputed smart seed sets from file."""
         try:
-            seeds_path = os.path.join(os.path.dirname(__file__), '../data/precomputed_smart_seeds.pkl')
+            # Try new format first (multiple sets)
+            seeds_path = os.path.join(os.path.dirname(__file__), '../data/precomputed_smart_seed_sets.pkl')
             
             if os.path.exists(seeds_path):
                 with open(seeds_path, 'rb') as f:
                     seeds_data = pickle.load(f)
                 
-                self.precomputed_seeds = seeds_data.get('seeds', [])
-                self.seeds_metadata = seeds_data.get('metadata', {})
+                if 'seed_sets' in seeds_data:
+                    # New format: multiple sets
+                    self.precomputed_seed_sets = seeds_data.get('seed_sets', [])
+                    self.seeds_metadata = seeds_data.get('metadata', {})
+                    
+                    total_seeds = sum(len(s) for s in self.precomputed_seed_sets)
+                    print(f"✅ Loaded {len(self.precomputed_seed_sets)} seed sets ({total_seeds} total seeds)")
+                    print(f"📊 Sets version: {seeds_data.get('version', 'unknown')}")
+                    print(f"🎯 Generation method: {self.seeds_metadata.get('generation_method', 'unknown')}")
+                    
+                    return True
+            
+            # Fallback to old format (single set)
+            old_seeds_path = os.path.join(os.path.dirname(__file__), '../data/precomputed_smart_seeds.pkl')
+            
+            if os.path.exists(old_seeds_path):
+                with open(old_seeds_path, 'rb') as f:
+                    seeds_data = pickle.load(f)
                 
-                print(f"✅ Loaded {len(self.precomputed_seeds)} precomputed smart seeds")
-                print(f"📊 Seeds version: {seeds_data.get('version', 'unknown')}")
-                print(f"🎯 Generation method: {self.seeds_metadata.get('generation_method', 'unknown')}")
-                
-                return True
-            else:
-                print(f"⚠️  No precomputed seeds found at {seeds_path}")
-                self.precomputed_seeds = []
-                self.seeds_metadata = {}
-                return False
+                # Convert old format to new format (single set)
+                if 'seeds' in seeds_data:
+                    old_seeds = seeds_data.get('seeds', [])
+                    self.precomputed_seed_sets = [old_seeds]  # Wrap in list to make it a single set
+                    self.seeds_metadata = seeds_data.get('metadata', {})
+                    
+                    print(f"✅ Loaded legacy format: 1 seed set ({len(old_seeds)} seeds)")
+                    print(f"📊 Legacy version: {seeds_data.get('version', 'unknown')}")
+                    
+                    return True
+            
+            print(f"⚠️  No precomputed seed sets found at {seeds_path} or {old_seeds_path}")
+            self.precomputed_seed_sets = []
+            self.seeds_metadata = {}
+            return False
                 
         except Exception as e:
-            print(f"❌ Error loading precomputed seeds: {e}")
-            self.precomputed_seeds = []
+            print(f"❌ Error loading precomputed seed sets: {e}")
+            self.precomputed_seed_sets = []
             self.seeds_metadata = {}
             return False
 
-    def get_smart_seeds(self, num_seeds: int = 3) -> List[Dict[str, Any]]:
-        """Get smart seeds - uses precomputed seeds when available, falls back to dynamic generation."""
+    def get_smart_seeds(self, num_seeds: int = 7) -> List[Dict[str, Any]]:
+        """Get smart seeds - randomly selects one complete set from precomputed sets."""
         
-        # 🆕 USE PRECOMPUTED SEEDS IF AVAILABLE
-        if hasattr(self, 'precomputed_seeds') and self.precomputed_seeds:
-            return self._get_precomputed_smart_seeds(num_seeds)
+        # 🆕 USE PRECOMPUTED SEED SETS IF AVAILABLE
+        if hasattr(self, 'precomputed_seed_sets') and self.precomputed_seed_sets:
+            return self._get_precomputed_smart_seed_set(num_seeds)
         else:
             # Fallback to dynamic generation
-            print("⚠️  Using dynamic seed generation - ensuring clusters are available...")
-            self._ensure_clusters()
+            print("⚠️  Using dynamic seed generation (precomputed seed sets not available)")
             return self._get_dynamic_smart_seeds(num_seeds)
     
-    def _get_precomputed_smart_seeds(self, num_seeds: int = 3) -> List[Dict[str, Any]]:
-        """Get smart seeds from precomputed pool, randomly selected for diversity."""
-        print(f"🌱 Getting {num_seeds} seeds from {len(self.precomputed_seeds)} precomputed seeds...")
+    def _get_precomputed_smart_seed_set(self, num_seeds: int = 7) -> List[Dict[str, Any]]:
+        """Get smart seeds by randomly selecting one complete set from precomputed sets."""
+        print(f"🌱 Getting seeds from {len(self.precomputed_seed_sets)} precomputed seed sets...")
         
-        # Filter out any precomputed seeds that are already seen
-        available_seeds = [seed for seed in self.precomputed_seeds 
+        # Randomly select one complete seed set
+        selected_set_idx = random.randint(0, len(self.precomputed_seed_sets) - 1)
+        selected_set = self.precomputed_seed_sets[selected_set_idx]
+        
+        print(f"🎲 Randomly selected seed set {selected_set_idx + 1} with {len(selected_set)} seeds")
+        
+        # Filter out any seeds that are already seen (shouldn't happen but safety check)
+        available_seeds = [seed for seed in selected_set 
                           if seed['index'] not in self.seen_watches]
         
         if len(available_seeds) < num_seeds:
-            print(f"⚠️  Only {len(available_seeds)} unseen precomputed seeds available")
-            # If we don't have enough unseen precomputed seeds, take what we can get
+            print(f"⚠️  Only {len(available_seeds)} unseen seeds in selected set, taking all available")
             selected_seeds = available_seeds
         else:
-            # Randomly select from available precomputed seeds
-            selected_seeds = random.sample(available_seeds, num_seeds)
+            # Take the requested number or the full set if requesting more than available
+            selected_seeds = available_seeds[:num_seeds]
         
         # Process selected seeds
         seed_watches = []
@@ -696,6 +731,7 @@ class EnhancedWatchBeamSearch:
             # Add session metadata
             watch['is_seed'] = True
             watch['is_precomputed'] = True
+            watch['selected_from_set'] = selected_set_idx + 1
             watch['seed_order'] = len(seed_watches)
             
             seed_watches.append(watch)
@@ -709,8 +745,12 @@ class EnhancedWatchBeamSearch:
             self.seen_brands.add(brand)
             self.seen_styles.add(style)
         
-        print(f"✅ Selected {len(seed_watches)} precomputed smart seeds")
-        print(f"📊 Seed strategies: {[s.get('seed_strategy', 'unknown') for s in seed_watches]}")
+        print(f"✅ Selected complete seed set {selected_set_idx + 1} with {len(seed_watches)} diverse seeds")
+        
+        # Show style diversity
+        styles_in_set = [s.get('style') for s in seed_watches]
+        unique_styles = len(set(styles_in_set))
+        print(f"🎨 Style diversity: {unique_styles} unique styles: {', '.join(set(styles_in_set))}")
         print(f"🎯 Total seen now: {len(self.seen_watches)}")
         
         return seed_watches
