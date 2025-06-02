@@ -125,6 +125,8 @@ export interface SessionResponse {
   seeds: Watch[];
   session_id: string;
   session_type: string;
+  algorithm_used?: string;
+  processing_time?: number;
 }
 
 export interface RecommendationsResponse {
@@ -133,6 +135,21 @@ export interface RecommendationsResponse {
   step: number;
   total_processed: number;
   message?: string;
+  confidence_scores?: number[];
+  diversity_score?: number;
+  exploration_rate?: number;
+  algorithm_used?: string;
+  processing_time?: number;
+  user_profile_summary?: {
+    engagement_level: string;
+    total_feedback: number;
+    preference_clusters: number;
+    exploration_rate: number;
+    dominant_brands: Record<string, number>;
+    dominant_styles: Record<string, number>;
+    session_duration: number;
+  };
+  next_exploration_suggestions?: string[];
 }
 
 export interface VariantsResponse {
@@ -159,6 +176,32 @@ export interface DragState {
   startY: number;
   currentX: number;
   currentY: number;
+}
+
+export interface RecommendationMetadata {
+  algorithm_used: string;
+  confidence: number;
+  score: number;
+  exploration_rate?: number;
+  diversity_score?: number;
+  is_seed?: boolean;
+  is_precomputed_seed?: boolean;
+  seed_style?: string;
+  cluster_id?: number;
+  recommendation_timestamp?: string;
+  user_engagement_level?: string;
+}
+
+export interface EnhancedWatch extends Watch {
+  algorithm?: string;
+  confidence?: number;
+  score?: number;
+  is_seed?: boolean;
+  is_precomputed_seed?: boolean;
+  seed_style?: string;
+  cluster_id?: number;
+  recommendation_timestamp?: string;
+  user_engagement_level?: string;
 }
 
 export type ViewType = 'discover' | 'liked' | 'history';

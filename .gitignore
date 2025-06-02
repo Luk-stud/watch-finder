@@ -73,3 +73,5 @@ node_modules/
 embeddings/
 !backend/embeddings/
 *.pt 
+# Local Netlify folder
+.netlify

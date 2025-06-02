@@ -96,35 +96,33 @@ export default function WatchFinderApp() {
       const dislikedIndices = dislikedWatches.map(w => w.index);
       const currentCandidates = currentWatches.map(w => w.index);
 
-      // Get all series we've already seen
-      const seenSeries = new Set([
-        ...likedWatches.map(w => w.specs?.serie),
-        ...dislikedWatches.map(w => w.specs?.serie),
-        ...currentWatches.map(w => w.specs?.serie)
-      ].filter(serie => serie && serie !== '-' && serie !== 'All'));
-      
       const response = await apiService.getRecommendations(
         likedIndices,
         dislikedIndices,
         currentCandidates,
-        step + 1
+        step + 1,
+        7 // num_recommendations
       );
       
       if (response.status === 'success' && response.recommendations.length > 0) {
-        // Filter out watches from series we've already seen
-        const filteredRecommendations = response.recommendations.filter(watch => {
-          const series = watch.specs?.serie;
-          return !series || series === '-' || series === 'All' || !seenSeries.has(series);
-        });
-
-        if (filteredRecommendations.length > 0) {
-          setCurrentWatches(filteredRecommendations);
-          setCurrentIndex(0);
-          setStep(response.step);
-        } else {
-          // If all recommendations were filtered out, try getting more
-          await getMoreRecommendations();
+        // Log modern backend insights for debugging
+        if (response.algorithm_used) {
+          console.log(`🤖 Algorithm used: ${response.algorithm_used}`);
         }
+        if (response.diversity_score !== undefined) {
+          console.log(`🎯 Diversity score: ${response.diversity_score.toFixed(2)}`);
+        }
+        if (response.user_profile_summary) {
+          console.log(`👤 User engagement: ${response.user_profile_summary.engagement_level}`);
+        }
+        if (response.next_exploration_suggestions) {
+          console.log(`💡 Exploration suggestions:`, response.next_exploration_suggestions);
+        }
+        
+        // Let backend handle all duplicate prevention
+        setCurrentWatches(response.recommendations);
+        setCurrentIndex(0);
+        setStep(response.step);
       } else {
         throw new Error('No more recommendations available');
       }
@@ -175,56 +173,24 @@ export default function WatchFinderApp() {
     if (!watch) return;
 
     try {
-      // Add the current watch's series to seen series if it has one
-      if (watch.specs?.serie && watch.specs.serie !== '-' && watch.specs.serie !== 'All') {
-        // Filter out any remaining watches from the same series in currentWatches
-        const filteredWatches = currentWatches.filter(w => 
-          w.index === watch.index || // Keep the current watch
-          !w.specs?.serie || // Keep watches without series
-          w.specs.serie === '-' || // Keep watches with no series
-          w.specs.serie === 'All' || // Keep watches with 'All' series
-          w.specs.serie !== watch.specs?.serie // Keep watches from different series
-        );
-
-        if (filteredWatches.length !== currentWatches.length) {
-          setCurrentWatches(filteredWatches);
-        }
-      }
-
       addLikedWatch(watch);
       await moveToNext();
     } catch (error) {
       console.error('Error liking watch:', error);
     }
-  }, [getCurrentWatch, currentWatches, addLikedWatch, moveToNext]);
+  }, [getCurrentWatch, addLikedWatch, moveToNext]);
 
   const handlePass = useCallback(async () => {
     const watch = getCurrentWatch();
     if (!watch) return;
 
     try {
-      // Add the current watch's series to seen series if it has one
-      if (watch.specs?.serie && watch.specs.serie !== '-' && watch.specs.serie !== 'All') {
-        // Filter out any remaining watches from the same series in currentWatches
-        const filteredWatches = currentWatches.filter(w => 
-          w.index === watch.index || // Keep the current watch
-          !w.specs?.serie || // Keep watches without series
-          w.specs.serie === '-' || // Keep watches with no series
-          w.specs.serie === 'All' || // Keep watches with different series
-          w.specs.serie !== watch.specs?.serie // Keep watches from different series
-        );
-
-        if (filteredWatches.length !== currentWatches.length) {
-          setCurrentWatches(filteredWatches);
-        }
-      }
-
       addDislikedWatch(watch);
       await moveToNext();
     } catch (error) {
       console.error('Error passing watch:', error);
     }
-  }, [getCurrentWatch, currentWatches, addDislikedWatch, moveToNext]);
+  }, [getCurrentWatch, addDislikedWatch, moveToNext]);
 
   const handleViewChange = (view: typeof currentView) => {
     setCurrentView(view);
@@ -450,12 +416,12 @@ export default function WatchFinderApp() {
               {/* Discovery Section */}
               <div className="flex-1 h-full">
                 <motion.div className="h-full relative flex flex-col rounded-2xl">
-                  {currentWatches.length > 0 && (
+                  {currentWatches.length > 0 && currentIndex < currentWatches.length && currentWatches[currentIndex] && (
                     <div className="flex justify-center flex-1 overflow-visible pb-8 pt-4">
                       <div className="w-full max-w-sm h-full relative">
                         <AnimatePresence mode="popLayout" initial={false}>
                           <WatchCard
-                            key={currentWatches[currentIndex].index}
+                            key={currentWatches[currentIndex].index || `watch-${currentIndex}`}
                             watch={currentWatches[currentIndex]}
                             onLike={handleLike}
                             onPass={handlePass}

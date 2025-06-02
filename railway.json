@@ -6,6 +6,6 @@
   "deploy": {
     "numReplicas": 1,
     "restartPolicyType": "ON_FAILURE",
-    "startCommand": "python api/app.py"
+    "startCommand": "python backend/api/modern_app.py"
   }
 } 

@@ -1,0 +1,208 @@
+{
+  "meaningful_cross_brand_count": 13,
+  "cross_brand_series": {
+    "Bronze": [
+      "Baltic Watches",
+      "Zelos",
+      "Eza"
+    ],
+    "GMT": [
+      "Dufrane",
+      "Nodus",
+      "Ming",
+      "Traska",
+      "Farer",
+      "Horage",
+      "Baltic Watches"
+    ],
+    "Chronograph": [
+      "Zelos",
+      "Autodromo",
+      "Farer",
+      "Geckota"
+    ],
+    "Automatic": [
+      "Autodromo",
+      "Bravur Watches",
+      "Farer",
+      "Geckota"
+    ],
+    "Titanium": [
+      "Baltic Watches",
+      "Zelos"
+    ],
+    "Automatic Chronograph": [
+      "Autodromo",
+      "Zelos"
+    ],
+    "Date": [
+      "Dufrane",
+      "Horage"
+    ],
+    "II": [
+      "Lorier",
+      "Nodus",
+      "Raven",
+      "Farer"
+    ],
+    "Steel": [
+      "Dufrane",
+      "Zelos"
+    ],
+    "40mm": [
+      "Farer",
+      "Vaer"
+    ],
+    "38mm": [
+      "Traska",
+      "Farer",
+      "Zelos"
+    ],
+    "III": [
+      "Nodus",
+      "Farer"
+    ],
+    "2": [
+      "Horage",
+      "Zelos"
+    ]
+  },
+  "brand_overlaps": {
+    "Baltic Watches & Zelos": [
+      "Titanium",
+      "Bronze"
+    ],
+    "Baltic Watches & Eza": [
+      "Bronze"
+    ],
+    "Eza & Zelos": [
+      "Bronze"
+    ],
+    "Dufrane & Nodus": [
+      "GMT"
+    ],
+    "Dufrane & Ming": [
+      "GMT"
+    ],
+    "Dufrane & Traska": [
+      "GMT"
+    ],
+    "Dufrane & Farer": [
+      "GMT"
+    ],
+    "Dufrane & Horage": [
+      "Date",
+      "GMT"
+    ],
+    "Baltic Watches & Dufrane": [
+      "GMT"
+    ],
+    "Ming & Nodus": [
+      "GMT"
+    ],
+    "Nodus & Traska": [
+      "GMT"
+    ],
+    "Farer & Nodus": [
+      "GMT",
+      "III",
+      "II"
+    ],
+    "Horage & Nodus": [
+      "GMT"
+    ],
+    "Baltic Watches & Nodus": [
+      "GMT"
+    ],
+    "Ming & Traska": [
+      "GMT"
+    ],
+    "Farer & Ming": [
+      "GMT"
+    ],
+    "Horage & Ming": [
+      "GMT"
+    ],
+    "Baltic Watches & Ming": [
+      "GMT"
+    ],
+    "Farer & Traska": [
+      "GMT",
+      "38mm"
+    ],
+    "Horage & Traska": [
+      "GMT"
+    ],
+    "Baltic Watches & Traska": [
+      "GMT"
+    ],
+    "Farer & Horage": [
+      "GMT"
+    ],
+    "Baltic Watches & Farer": [
+      "GMT"
+    ],
+    "Baltic Watches & Horage": [
+      "GMT"
+    ],
+    "Autodromo & Zelos": [
+      "Automatic Chronograph",
+      "Chronograph"
+    ],
+    "Farer & Zelos": [
+      "Chronograph",
+      "38mm"
+    ],
+    "Geckota & Zelos": [
+      "Chronograph"
+    ],
+    "Autodromo & Farer": [
+      "Automatic",
+      "Chronograph"
+    ],
+    "Autodromo & Geckota": [
+      "Automatic",
+      "Chronograph"
+    ],
+    "Farer & Geckota": [
+      "Automatic",
+      "Chronograph"
+    ],
+    "Autodromo & Bravur Watches": [
+      "Automatic"
+    ],
+    "Bravur Watches & Farer": [
+      "Automatic"
+    ],
+    "Bravur Watches & Geckota": [
+      "Automatic"
+    ],
+    "Lorier & Nodus": [
+      "II"
+    ],
+    "Lorier & Raven": [
+      "II"
+    ],
+    "Farer & Lorier": [
+      "II"
+    ],
+    "Nodus & Raven": [
+      "II"
+    ],
+    "Farer & Raven": [
+      "II"
+    ],
+    "Dufrane & Zelos": [
+      "Steel"
+    ],
+    "Farer & Vaer": [
+      "40mm"
+    ],
+    "Traska & Zelos": [
+      "38mm"
+    ],
+    "Horage & Zelos": [
+      "2"
+    ]
+  }
+}

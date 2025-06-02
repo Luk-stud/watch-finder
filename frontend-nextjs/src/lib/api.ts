@@ -70,7 +70,7 @@ export class ApiService {
     return data;
   }
 
-  async startSession(numSeeds: number = 1): Promise<SessionResponse> {
+  async startSession(numSeeds: number = 7): Promise<SessionResponse> {
     const response = await this.request<SessionResponse>('/start-session', {
       method: 'POST',
       body: JSON.stringify({ num_seeds: numSeeds }),
@@ -88,7 +88,8 @@ export class ApiService {
     likedIndices: number[],
     dislikedIndices: number[],
     currentCandidates: number[],
-    step: number
+    step: number,
+    numRecommendations: number = 7
   ): Promise<RecommendationsResponse> {
     if (!this.sessionId) {
       throw new Error('No active session. Please start a new session.');
@@ -101,7 +102,10 @@ export class ApiService {
         liked_indices: likedIndices,
         disliked_indices: dislikedIndices,
         current_candidates: currentCandidates,
+        num_recommendations: numRecommendations,
         step: step,
+        exploration_factor: 0.3,
+        diversity_threshold: 0.7
       }),
     });
   }
@@ -184,8 +188,30 @@ export class ApiService {
     price_ranges: Record<string, number>;
     embedding_dimension: number;
     active_sessions: number;
+    performance_metrics?: {
+      total_requests: number;
+      avg_response_time: number;
+      cache_hit_rate: number;
+      user_satisfaction: number;
+    };
   }> {
     return this.request(`/stats`);
+  }
+
+  // New method for modern backend compatibility
+  async getDiagnostics(): Promise<{
+    status: string;
+    recommendation_engine: string;
+    similarity_index: string;
+    smart_seeds_loaded: boolean;
+    performance_metrics: {
+      total_requests: number;
+      avg_response_time: number;
+      cache_hit_rate: number;
+      user_satisfaction: number;
+    };
+  }> {
+    return this.request('/diagnostics');
   }
 }
 

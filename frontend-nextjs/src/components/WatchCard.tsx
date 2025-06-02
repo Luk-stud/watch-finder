@@ -5,12 +5,12 @@ import { useState, useEffect } from 'react';
 import { motion, PanInfo, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { Heart, X, Droplets, Clock, Settings, Diamond, Info } from 'lucide-react';
-import type { Watch, ViewType } from '@/types';
+import type { Watch, ViewType, EnhancedWatch } from '@/types';
 import { formatPrice, getImageUrl } from '@/lib/utils';
 import Navigation from './Navigation';
 
 interface WatchCardProps {
-  watch: Watch;
+  watch: Watch | EnhancedWatch;
   onLike: () => void;
   onPass: () => void;
   isActive?: boolean;
@@ -204,6 +204,21 @@ export default function WatchCard({
       >
         {/* Swipe Indicators */}
         {getSwipeIndicator()}
+
+        {/* Debug Badge - Modern Backend Metadata */}
+        {(watch as EnhancedWatch).algorithm && (
+          <div className="absolute top-2 left-2 z-20 bg-black/70 text-white px-2 py-1 rounded-md text-xs font-mono">
+            {(watch as EnhancedWatch).algorithm}
+            {(watch as EnhancedWatch).confidence && (
+              <span className="ml-1 text-green-300">
+                {(watch as EnhancedWatch).confidence?.toFixed(1)}
+              </span>
+            )}
+            {(watch as EnhancedWatch).is_seed && (
+              <span className="ml-1 text-blue-300">SEED</span>
+            )}
+          </div>
+        )}
 
         {/* Navigation - User Icon for Past Likes & History */}
         <div className="absolute top-6 right-6 z-30">

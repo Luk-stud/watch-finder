@@ -1,0 +1,1595 @@
+{
+  "seed_sets": [
+    [
+      {
+        "index": 67,
+        "brand": "Aquatico",
+        "model": "Ocean Star",
+        "style": "diver",
+        "brand_category": "independent",
+        "price": 438.0,
+        "seed_set_id": 0,
+        "seed_position": 0,
+        "seed_style": "diver"
+      },
+      {
+        "index": 688,
+        "brand": "Dan Henry",
+        "model": "1963 Pilot Chronograph",
+        "style": "pilot chronograph",
+        "brand_category": "independent",
+        "price": 280.0,
+        "seed_set_id": 0,
+        "seed_position": 1,
+        "seed_style": "pilot chronograph"
+      },
+      {
+        "index": 1873,
+        "brand": "Melbourne Watch Co",
+        "model": "Fitzroy",
+        "style": "12 hours",
+        "brand_category": "independent",
+        "price": 595.0,
+        "seed_set_id": 0,
+        "seed_position": 2,
+        "seed_style": "12 hours"
+      },
+      {
+        "index": 29,
+        "brand": "Autodromo",
+        "model": "Monoposto",
+        "style": "rally",
+        "brand_category": "independent",
+        "price": 875.0,
+        "seed_set_id": 0,
+        "seed_position": 3,
+        "seed_style": "rally"
+      },
+      {
+        "index": 2885,
+        "brand": "Unimatic Watches",
+        "model": "Modello Tre",
+        "style": "diver chronograph",
+        "brand_category": "independent",
+        "price": 577.0,
+        "seed_set_id": 0,
+        "seed_position": 4,
+        "seed_style": "diver chronograph"
+      },
+      {
+        "index": 1609,
+        "brand": "Nodus",
+        "model": "Sector",
+        "style": "sport",
+        "brand_category": "independent",
+        "price": 1199.0,
+        "seed_set_id": 0,
+        "seed_position": 5,
+        "seed_style": "sport"
+      },
+      {
+        "index": 496,
+        "brand": "Bravur Watches",
+        "model": "BW001",
+        "style": "dress",
+        "brand_category": "independent",
+        "price": 609.25,
+        "seed_set_id": 0,
+        "seed_position": 6,
+        "seed_style": "dress"
+      }
+    ],
+    [
+      {
+        "index": 1034,
+        "brand": "Horage",
+        "model": "Lensman",
+        "style": "tool",
+        "brand_category": "independent",
+        "price": 6150.0,
+        "seed_set_id": 1,
+        "seed_position": 0,
+        "seed_style": "tool"
+      },
+      {
+        "index": 342,
+        "brand": "Boldr",
+        "model": "Venture",
+        "style": "field gmt",
+        "brand_category": "independent",
+        "price": 299.0,
+        "seed_set_id": 1,
+        "seed_position": 1,
+        "seed_style": "field gmt"
+      },
+      {
+        "index": 1374,
+        "brand": "Geckota",
+        "model": "Chronotimer",
+        "style": "rally chronograph",
+        "brand_category": "independent",
+        "price": 399.0,
+        "seed_set_id": 1,
+        "seed_position": 2,
+        "seed_style": "rally chronograph"
+      },
+      {
+        "index": 497,
+        "brand": "Farer",
+        "model": "Monopusher",
+        "style": "gmt",
+        "brand_category": "independent",
+        "price": 2015.0,
+        "seed_set_id": 1,
+        "seed_position": 3,
+        "seed_style": "gmt"
+      },
+      {
+        "index": 1907,
+        "brand": "Ming",
+        "model": "29.01",
+        "style": "world timer",
+        "brand_category": "independent",
+        "price": 22000.0,
+        "seed_set_id": 1,
+        "seed_position": 4,
+        "seed_style": "world timer"
+      },
+      {
+        "index": 1076,
+        "brand": "Henry Archer",
+        "model": "Vesterhav",
+        "style": "sport",
+        "brand_category": "independent",
+        "price": 646.0,
+        "seed_set_id": 1,
+        "seed_position": 5,
+        "seed_style": "sport"
+      },
+      {
+        "index": 371,
+        "brand": "Autodromo",
+        "model": "Monoposto",
+        "style": "rally",
+        "brand_category": "independent",
+        "price": 950.0,
+        "seed_set_id": 1,
+        "seed_position": 6,
+        "seed_style": "rally"
+      }
+    ],
+    [
+      {
+        "index": 139,
+        "brand": "Boldr",
+        "model": "Globetrotter",
+        "style": "diver gmt",
+        "brand_category": "independent",
+        "price": 899.0,
+        "seed_set_id": 2,
+        "seed_position": 0,
+        "seed_style": "diver gmt"
+      },
+      {
+        "index": 811,
+        "brand": "Dan Henry",
+        "model": "1972",
+        "style": "pilot chronograph",
+        "brand_category": "independent",
+        "price": 350.0,
+        "seed_set_id": 2,
+        "seed_position": 1,
+        "seed_style": "pilot chronograph"
+      },
+      {
+        "index": 1522,
+        "brand": "Furlan Marri",
+        "model": "Mechaquartz",
+        "style": "chronograph",
+        "brand_category": "independent",
+        "price": 460.0,
+        "seed_set_id": 2,
+        "seed_position": 2,
+        "seed_style": "chronograph"
+      },
+      {
+        "index": 1636,
+        "brand": "Ming",
+        "model": "19.02",
+        "style": "world timer",
+        "brand_category": "independent",
+        "price": NaN,
+        "seed_set_id": 2,
+        "seed_position": 3,
+        "seed_style": "world timer"
+      },
+      {
+        "index": 184,
+        "brand": "Boldr",
+        "model": "Venture",
+        "style": "field chronograph",
+        "brand_category": "independent",
+        "price": 299.0,
+        "seed_set_id": 2,
+        "seed_position": 4,
+        "seed_style": "field chronograph"
+      },
+      {
+        "index": 260,
+        "brand": "Boldr",
+        "model": "Venture",
+        "style": "field gmt",
+        "brand_category": "independent",
+        "price": 299.0,
+        "seed_set_id": 2,
+        "seed_position": 5,
+        "seed_style": "field gmt"
+      },
+      {
+        "index": 671,
+        "brand": "Elka Watch Co",
+        "model": "D08-0808",
+        "style": "dress",
+        "brand_category": "independent",
+        "price": 1625.0,
+        "seed_set_id": 2,
+        "seed_position": 6,
+        "seed_style": "dress"
+      }
+    ],
+    [
+      {
+        "index": 2678,
+        "brand": "Unimatic Watches",
+        "model": "Modello Tre",
+        "style": "diver chronograph",
+        "brand_category": "independent",
+        "price": 935.0,
+        "seed_set_id": 3,
+        "seed_position": 0,
+        "seed_style": "diver chronograph"
+      },
+      {
+        "index": 2545,
+        "brand": "Vortic Watch Company",
+        "model": "The Boston 314",
+        "style": "-",
+        "brand_category": "independent",
+        "price": 2800.0,
+        "seed_set_id": 3,
+        "seed_position": 1,
+        "seed_style": "-"
+      },
+      {
+        "index": 646,
+        "brand": "Farer",
+        "model": "Moonphase",
+        "style": "dress",
+        "brand_category": "independent",
+        "price": 1605.0,
+        "seed_set_id": 3,
+        "seed_position": 2,
+        "seed_style": "dress"
+      },
+      {
+        "index": 315,
+        "brand": "Baltic Watches",
+        "model": "Chronograph",
+        "style": "chronograph",
+        "brand_category": "independent",
+        "price": 594.0,
+        "seed_set_id": 3,
+        "seed_position": 3,
+        "seed_style": "chronograph"
+      },
+      {
+        "index": 2760,
+        "brand": "Vaer",
+        "model": "A12",
+        "style": "military",
+        "brand_category": "independent",
+        "price": 899.0,
+        "seed_set_id": 3,
+        "seed_position": 4,
+        "seed_style": "military"
+      },
+      {
+        "index": 1836,
+        "brand": "Nodus",
+        "model": "Sector",
+        "style": "gmt",
+        "brand_category": "independent",
+        "price": 450.0,
+        "seed_set_id": 3,
+        "seed_position": 5,
+        "seed_style": "gmt"
+      },
+      {
+        "index": 810,
+        "brand": "Farer",
+        "model": "World Timer",
+        "style": "world timer",
+        "brand_category": "independent",
+        "price": 1410.0,
+        "seed_set_id": 3,
+        "seed_position": 6,
+        "seed_style": "world timer"
+      }
+    ],
+    [
+      {
+        "index": 381,
+        "brand": "Boldr",
+        "model": "Venture",
+        "style": "chronograph",
+        "brand_category": "independent",
+        "price": 299.0,
+        "seed_set_id": 4,
+        "seed_position": 0,
+        "seed_style": "chronograph"
+      },
+      {
+        "index": 1215,
+        "brand": "Maen",
+        "model": "Hudson 38",
+        "style": "diver gmt",
+        "brand_category": "independent",
+        "price": 1208.0,
+        "seed_set_id": 4,
+        "seed_position": 1,
+        "seed_style": "diver gmt"
+      },
+      {
+        "index": 3054,
+        "brand": "Vaer",
+        "model": "A12",
+        "style": "military",
+        "brand_category": "independent",
+        "price": 899.0,
+        "seed_set_id": 4,
+        "seed_position": 2,
+        "seed_style": "military"
+      },
+      {
+        "index": 2054,
+        "brand": "Straton",
+        "model": "Syncro",
+        "style": "rally chronograph",
+        "brand_category": "independent",
+        "price": 499.0,
+        "seed_set_id": 4,
+        "seed_position": 3,
+        "seed_style": "rally chronograph"
+      },
+      {
+        "index": 970,
+        "brand": "Elka Watch Co",
+        "model": "D02-0806",
+        "style": "dress",
+        "brand_category": "independent",
+        "price": 1625.0,
+        "seed_set_id": 4,
+        "seed_position": 4,
+        "seed_style": "dress"
+      },
+      {
+        "index": 2336,
+        "brand": "Ventus",
+        "model": "Caspian",
+        "style": "pilot chronograph",
+        "brand_category": "independent",
+        "price": 299.0,
+        "seed_set_id": 4,
+        "seed_position": 5,
+        "seed_style": "pilot chronograph"
+      },
+      {
+        "index": 1046,
+        "brand": "Horage",
+        "model": "Lensman",
+        "style": "tool",
+        "brand_category": "independent",
+        "price": 5450.0,
+        "seed_set_id": 4,
+        "seed_position": 6,
+        "seed_style": "tool"
+      }
+    ],
+    [
+      {
+        "index": 312,
+        "brand": "Boldr",
+        "model": "Venture",
+        "style": "field gmt",
+        "brand_category": "independent",
+        "price": 299.0,
+        "seed_set_id": 5,
+        "seed_position": 0,
+        "seed_style": "field gmt"
+      },
+      {
+        "index": 1470,
+        "brand": "Gruppo Gamma",
+        "model": "Nexus",
+        "style": "tool",
+        "brand_category": "independent",
+        "price": 850.0,
+        "seed_set_id": 5,
+        "seed_position": 1,
+        "seed_style": "tool"
+      },
+      {
+        "index": 737,
+        "brand": "Farer",
+        "model": "World Timer",
+        "style": "world timer",
+        "brand_category": "independent",
+        "price": 1410.0,
+        "seed_set_id": 5,
+        "seed_position": 2,
+        "seed_style": "world timer"
+      },
+      {
+        "index": 2915,
+        "brand": "Unimatic Watches",
+        "model": "Modello Tre",
+        "style": "diver chronograph",
+        "brand_category": "independent",
+        "price": 577.0,
+        "seed_set_id": 5,
+        "seed_position": 3,
+        "seed_style": "diver chronograph"
+      },
+      {
+        "index": 2158,
+        "brand": "Straton",
+        "model": "Classic Driver",
+        "style": "rally chronograph",
+        "brand_category": "independent",
+        "price": 299.0,
+        "seed_set_id": 5,
+        "seed_position": 4,
+        "seed_style": "rally chronograph"
+      },
+      {
+        "index": 1709,
+        "brand": "Oak & Oscar",
+        "model": "The Atwood",
+        "style": "chronograph",
+        "brand_category": "independent",
+        "price": 2450.0,
+        "seed_set_id": 5,
+        "seed_position": 5,
+        "seed_style": "chronograph"
+      },
+      {
+        "index": 2923,
+        "brand": "Ventus",
+        "model": "Mori",
+        "style": "diver",
+        "brand_category": "independent",
+        "price": 319.0,
+        "seed_set_id": 5,
+        "seed_position": 6,
+        "seed_style": "diver"
+      }
+    ],
+    [
+      {
+        "index": 3301,
+        "brand": "Ventus",
+        "model": "Mori 300m",
+        "style": "diver",
+        "brand_category": "independent",
+        "price": 349.0,
+        "seed_set_id": 6,
+        "seed_position": 0,
+        "seed_style": "diver"
+      },
+      {
+        "index": 415,
+        "brand": "Farer",
+        "model": "World Timer",
+        "style": "world timer",
+        "brand_category": "independent",
+        "price": 1410.0,
+        "seed_set_id": 6,
+        "seed_position": 1,
+        "seed_style": "world timer"
+      },
+      {
+        "index": 2993,
+        "brand": "Vortic Watch Company",
+        "model": "The Springfield 463",
+        "style": "-",
+        "brand_category": "independent",
+        "price": 3500.0,
+        "seed_set_id": 6,
+        "seed_position": 2,
+        "seed_style": "-"
+      },
+      {
+        "index": 1628,
+        "brand": "Nodus",
+        "model": "Sector",
+        "style": "diver gmt",
+        "brand_category": "independent",
+        "price": 525.0,
+        "seed_set_id": 6,
+        "seed_position": 3,
+        "seed_style": "diver gmt"
+      },
+      {
+        "index": 268,
+        "brand": "Boldr",
+        "model": "Venture",
+        "style": "field gmt",
+        "brand_category": "independent",
+        "price": 299.0,
+        "seed_set_id": 6,
+        "seed_position": 4,
+        "seed_style": "field gmt"
+      },
+      {
+        "index": 410,
+        "brand": "Elka Watch Co",
+        "model": "X01-0901",
+        "style": "pilot",
+        "brand_category": "independent",
+        "price": 1569.0,
+        "seed_set_id": 6,
+        "seed_position": 5,
+        "seed_style": "pilot"
+      },
+      {
+        "index": 214,
+        "brand": "Astor Banks",
+        "model": "Sea Ranger",
+        "style": "tool",
+        "brand_category": "independent",
+        "price": 1395.0,
+        "seed_set_id": 6,
+        "seed_position": 6,
+        "seed_style": "tool"
+      }
+    ],
+    [
+      {
+        "index": 2202,
+        "brand": "Straton",
+        "model": "Speciale",
+        "style": "rally chronograph",
+        "brand_category": "independent",
+        "price": 1199.0,
+        "seed_set_id": 7,
+        "seed_position": 0,
+        "seed_style": "rally chronograph"
+      },
+      {
+        "index": 642,
+        "brand": "Deep Blue",
+        "model": "Master Chrono 7750 Auto Diver",
+        "style": "diver chronograph",
+        "brand_category": "independent",
+        "price": 1999.99,
+        "seed_set_id": 7,
+        "seed_position": 1,
+        "seed_style": "diver chronograph"
+      },
+      {
+        "index": 1674,
+        "brand": "Out Of Order",
+        "model": "All",
+        "style": "gmt",
+        "brand_category": "independent",
+        "price": 605.0,
+        "seed_set_id": 7,
+        "seed_position": 2,
+        "seed_style": "gmt"
+      },
+      {
+        "index": 957,
+        "brand": "Bravur Watches",
+        "model": "Grand Tour",
+        "style": "chronograph",
+        "brand_category": "independent",
+        "price": 2590.0,
+        "seed_set_id": 7,
+        "seed_position": 3,
+        "seed_style": "chronograph"
+      },
+      {
+        "index": 1690,
+        "brand": "Ming",
+        "model": "29.01",
+        "style": "world timer",
+        "brand_category": "independent",
+        "price": NaN,
+        "seed_set_id": 7,
+        "seed_position": 4,
+        "seed_style": "world timer"
+      },
+      {
+        "index": 1723,
+        "brand": "Nodus",
+        "model": "Sector",
+        "style": "diver gmt",
+        "brand_category": "independent",
+        "price": 525.0,
+        "seed_set_id": 7,
+        "seed_position": 5,
+        "seed_style": "diver gmt"
+      },
+      {
+        "index": 2838,
+        "brand": "Ventus",
+        "model": "Caspian",
+        "style": "pilot",
+        "brand_category": "independent",
+        "price": 299.0,
+        "seed_set_id": 7,
+        "seed_position": 6,
+        "seed_style": "pilot"
+      }
+    ],
+    [
+      {
+        "index": 2719,
+        "brand": "Ventus",
+        "model": "Mori 300m",
+        "style": "diver",
+        "brand_category": "independent",
+        "price": 349.0,
+        "seed_set_id": 8,
+        "seed_position": 0,
+        "seed_style": "diver"
+      },
+      {
+        "index": 655,
+        "brand": "Elka Watch Co",
+        "model": "X09-0802",
+        "style": "pilot",
+        "brand_category": "independent",
+        "price": 1625.0,
+        "seed_set_id": 8,
+        "seed_position": 1,
+        "seed_style": "pilot"
+      },
+      {
+        "index": 2485,
+        "brand": "Unimatic Watches",
+        "model": "Modello Tre",
+        "style": "diver chronograph",
+        "brand_category": "independent",
+        "price": 687.0,
+        "seed_set_id": 8,
+        "seed_position": 2,
+        "seed_style": "diver chronograph"
+      },
+      {
+        "index": 387,
+        "brand": "Boldr",
+        "model": "Venture",
+        "style": "field",
+        "brand_category": "independent",
+        "price": 299.0,
+        "seed_set_id": 8,
+        "seed_position": 3,
+        "seed_style": "field"
+      },
+      {
+        "index": 1355,
+        "brand": "Isotope",
+        "model": "Isotope",
+        "style": "dress",
+        "brand_category": "independent",
+        "price": 2580.0,
+        "seed_set_id": 8,
+        "seed_position": 4,
+        "seed_style": "dress"
+      },
+      {
+        "index": 2717,
+        "brand": "Vortic Watch Company",
+        "model": "The Springfield 544",
+        "style": "-",
+        "brand_category": "independent",
+        "price": 4000.0,
+        "seed_set_id": 8,
+        "seed_position": 5,
+        "seed_style": "-"
+      },
+      {
+        "index": 825,
+        "brand": "Farer",
+        "model": "Chrono-Classic",
+        "style": "chronograph",
+        "brand_category": "independent",
+        "price": 2195.0,
+        "seed_set_id": 8,
+        "seed_position": 6,
+        "seed_style": "chronograph"
+      }
+    ],
+    [
+      {
+        "index": 1812,
+        "brand": "Nodus",
+        "model": "Sector",
+        "style": "diver gmt",
+        "brand_category": "independent",
+        "price": 475.0,
+        "seed_set_id": 9,
+        "seed_position": 0,
+        "seed_style": "diver gmt"
+      },
+      {
+        "index": 767,
+        "brand": "Elka Watch Co",
+        "model": "D05-0901",
+        "style": "dress",
+        "brand_category": "independent",
+        "price": 1569.0,
+        "seed_set_id": 9,
+        "seed_position": 1,
+        "seed_style": "dress"
+      },
+      {
+        "index": 1238,
+        "brand": "Halios Watches",
+        "model": "Seaforth",
+        "style": "12 hours",
+        "brand_category": "independent",
+        "price": 940.0,
+        "seed_set_id": 9,
+        "seed_position": 2,
+        "seed_style": "12 hours"
+      },
+      {
+        "index": 2469,
+        "brand": "Traska",
+        "model": "Venturer",
+        "style": "sport",
+        "brand_category": "independent",
+        "price": 585.0,
+        "seed_set_id": 9,
+        "seed_position": 3,
+        "seed_style": "sport"
+      },
+      {
+        "index": 2386,
+        "brand": "Vortic Watch Company",
+        "model": "The Chicago 396",
+        "style": "-",
+        "brand_category": "independent",
+        "price": 2200.0,
+        "seed_set_id": 9,
+        "seed_position": 4,
+        "seed_style": "-"
+      },
+      {
+        "index": 2899,
+        "brand": "Unimatic Watches",
+        "model": "Modello Tre",
+        "style": "diver chronograph",
+        "brand_category": "independent",
+        "price": 687.0,
+        "seed_set_id": 9,
+        "seed_position": 5,
+        "seed_style": "diver chronograph"
+      },
+      {
+        "index": 157,
+        "brand": "Boldr",
+        "model": "Venture",
+        "style": "field",
+        "brand_category": "independent",
+        "price": 339.0,
+        "seed_set_id": 9,
+        "seed_position": 6,
+        "seed_style": "field"
+      }
+    ],
+    [
+      {
+        "index": 1615,
+        "brand": "Nodus",
+        "model": "Sector",
+        "style": "pilot",
+        "brand_category": "independent",
+        "price": 525.0,
+        "seed_set_id": 10,
+        "seed_position": 0,
+        "seed_style": "pilot"
+      },
+      {
+        "index": 2290,
+        "brand": "Straton",
+        "model": "Classic Driver",
+        "style": "rally chronograph",
+        "brand_category": "independent",
+        "price": 299.0,
+        "seed_set_id": 10,
+        "seed_position": 1,
+        "seed_style": "rally chronograph"
+      },
+      {
+        "index": 171,
+        "brand": "Astor Banks",
+        "model": "Sea Ranger",
+        "style": "tool",
+        "brand_category": "independent",
+        "price": 1395.0,
+        "seed_set_id": 10,
+        "seed_position": 2,
+        "seed_style": "tool"
+      },
+      {
+        "index": 1797,
+        "brand": "Melbourne Watch Co",
+        "model": "Fitzroy",
+        "style": "12 hours",
+        "brand_category": "independent",
+        "price": 595.0,
+        "seed_set_id": 10,
+        "seed_position": 3,
+        "seed_style": "12 hours"
+      },
+      {
+        "index": 3021,
+        "brand": "Ventus",
+        "model": "Caspian",
+        "style": "pilot chronograph",
+        "brand_category": "independent",
+        "price": 299.0,
+        "seed_set_id": 10,
+        "seed_position": 4,
+        "seed_style": "pilot chronograph"
+      },
+      {
+        "index": 771,
+        "brand": "Bravur Watches",
+        "model": "Team Heritage",
+        "style": "sport",
+        "brand_category": "independent",
+        "price": 1195.0,
+        "seed_set_id": 10,
+        "seed_position": 5,
+        "seed_style": "sport"
+      },
+      {
+        "index": 265,
+        "brand": "Anordain",
+        "model": "Model 2",
+        "style": "field",
+        "brand_category": "independent",
+        "price": 1292.0,
+        "seed_set_id": 10,
+        "seed_position": 6,
+        "seed_style": "field"
+      }
+    ],
+    [
+      {
+        "index": 1546,
+        "brand": "Out Of Order",
+        "model": "Trecento",
+        "style": "gmt",
+        "brand_category": "independent",
+        "price": 1045.0,
+        "seed_set_id": 11,
+        "seed_position": 0,
+        "seed_style": "gmt"
+      },
+      {
+        "index": 2004,
+        "brand": "Steinhart",
+        "model": "Architect blue",
+        "style": "-",
+        "brand_category": "independent",
+        "price": 9240.0,
+        "seed_set_id": 11,
+        "seed_position": 1,
+        "seed_style": "-"
+      },
+      {
+        "index": 86,
+        "brand": "Boldr",
+        "model": "Venture",
+        "style": "field chronograph",
+        "brand_category": "independent",
+        "price": 299.0,
+        "seed_set_id": 11,
+        "seed_position": 2,
+        "seed_style": "field chronograph"
+      },
+      {
+        "index": 2244,
+        "brand": "Serica",
+        "model": "6190",
+        "style": "field",
+        "brand_category": "independent",
+        "price": 1199.0,
+        "seed_set_id": 11,
+        "seed_position": 3,
+        "seed_style": "field"
+      },
+      {
+        "index": 3189,
+        "brand": "Ventus",
+        "model": "Mori",
+        "style": "diver",
+        "brand_category": "independent",
+        "price": 319.0,
+        "seed_set_id": 11,
+        "seed_position": 4,
+        "seed_style": "diver"
+      },
+      {
+        "index": 867,
+        "brand": "Elka Watch Co",
+        "model": "D04-0806",
+        "style": "dress",
+        "brand_category": "independent",
+        "price": 1625.0,
+        "seed_set_id": 11,
+        "seed_position": 5,
+        "seed_style": "dress"
+      },
+      {
+        "index": 1339,
+        "brand": "Hemel",
+        "model": "HF Series",
+        "style": "pilot chronograph",
+        "brand_category": "independent",
+        "price": 499.99,
+        "seed_set_id": 11,
+        "seed_position": 6,
+        "seed_style": "pilot chronograph"
+      }
+    ],
+    [
+      {
+        "index": 326,
+        "brand": "Boldr",
+        "model": "Venture",
+        "style": "chronograph",
+        "brand_category": "independent",
+        "price": 299.0,
+        "seed_set_id": 12,
+        "seed_position": 0,
+        "seed_style": "chronograph"
+      },
+      {
+        "index": 1705,
+        "brand": "Melbourne Watch Co",
+        "model": "Fitzroy",
+        "style": "12 hours",
+        "brand_category": "independent",
+        "price": 595.0,
+        "seed_set_id": 12,
+        "seed_position": 1,
+        "seed_style": "12 hours"
+      },
+      {
+        "index": 1078,
+        "brand": "Gruppo Gamma",
+        "model": "Nexus",
+        "style": "tool",
+        "brand_category": "independent",
+        "price": 800.0,
+        "seed_set_id": 12,
+        "seed_position": 2,
+        "seed_style": "tool"
+      },
+      {
+        "index": 376,
+        "brand": "Boldr",
+        "model": "Venture",
+        "style": "field chronograph",
+        "brand_category": "independent",
+        "price": 299.0,
+        "seed_set_id": 12,
+        "seed_position": 3,
+        "seed_style": "field chronograph"
+      },
+      {
+        "index": 259,
+        "brand": "Anordain",
+        "model": "Model 1",
+        "style": "dress",
+        "brand_category": "independent",
+        "price": 1632.0,
+        "seed_set_id": 12,
+        "seed_position": 4,
+        "seed_style": "dress"
+      },
+      {
+        "index": 1614,
+        "brand": "Out Of Order",
+        "model": "Pilot Cronografo",
+        "style": "pilot chronograph",
+        "brand_category": "independent",
+        "price": 396.0,
+        "seed_set_id": 12,
+        "seed_position": 5,
+        "seed_style": "pilot chronograph"
+      },
+      {
+        "index": 2792,
+        "brand": "Ventus",
+        "model": "Caspian",
+        "style": "pilot",
+        "brand_category": "independent",
+        "price": 299.0,
+        "seed_set_id": 12,
+        "seed_position": 6,
+        "seed_style": "pilot"
+      }
+    ],
+    [
+      {
+        "index": 356,
+        "brand": "Boldr",
+        "model": "Venture",
+        "style": "field",
+        "brand_category": "independent",
+        "price": 299.0,
+        "seed_set_id": 13,
+        "seed_position": 0,
+        "seed_style": "field"
+      },
+      {
+        "index": 2691,
+        "brand": "Vortic Watch Company",
+        "model": "The Springfield 226",
+        "style": "-",
+        "brand_category": "independent",
+        "price": 2800.0,
+        "seed_set_id": 13,
+        "seed_position": 1,
+        "seed_style": "-"
+      },
+      {
+        "index": 1500,
+        "brand": "Geckota",
+        "model": "Sea Hunter Dive Watch",
+        "style": "diver",
+        "brand_category": "independent",
+        "price": 499.0,
+        "seed_set_id": 13,
+        "seed_position": 2,
+        "seed_style": "diver"
+      },
+      {
+        "index": 1433,
+        "brand": "Horage",
+        "model": "Lensman",
+        "style": "tool",
+        "brand_category": "independent",
+        "price": 5450.0,
+        "seed_set_id": 13,
+        "seed_position": 3,
+        "seed_style": "tool"
+      },
+      {
+        "index": 3109,
+        "brand": "Unimatic Watches",
+        "model": "Modello Quattro",
+        "style": "sport",
+        "brand_category": "independent",
+        "price": 825.0,
+        "seed_set_id": 13,
+        "seed_position": 4,
+        "seed_style": "sport"
+      },
+      {
+        "index": 164,
+        "brand": "Baltic Watches",
+        "model": "Chronograph",
+        "style": "chronograph",
+        "brand_category": "independent",
+        "price": 594.0,
+        "seed_set_id": 13,
+        "seed_position": 5,
+        "seed_style": "chronograph"
+      },
+      {
+        "index": 896,
+        "brand": "Dufrane",
+        "model": "Bergstrom",
+        "style": "pilot",
+        "brand_category": "independent",
+        "price": 1099.0,
+        "seed_set_id": 13,
+        "seed_position": 6,
+        "seed_style": "pilot"
+      }
+    ],
+    [
+      {
+        "index": 1487,
+        "brand": "Halios Watches",
+        "model": "Seaforth",
+        "style": "12 hours",
+        "brand_category": "independent",
+        "price": 940.0,
+        "seed_set_id": 14,
+        "seed_position": 0,
+        "seed_style": "12 hours"
+      },
+      {
+        "index": 493,
+        "brand": "Dufrane",
+        "model": "Mabry",
+        "style": "field",
+        "brand_category": "independent",
+        "price": 599.0,
+        "seed_set_id": 14,
+        "seed_position": 1,
+        "seed_style": "field"
+      },
+      {
+        "index": 2473,
+        "brand": "Traska",
+        "model": "Venturer",
+        "style": "gmt",
+        "brand_category": "independent",
+        "price": 695.0,
+        "seed_set_id": 14,
+        "seed_position": 2,
+        "seed_style": "gmt"
+      },
+      {
+        "index": 1946,
+        "brand": "Studio Underd0g",
+        "model": "02 Series",
+        "style": "dress",
+        "brand_category": "independent",
+        "price": 1000.0,
+        "seed_set_id": 14,
+        "seed_position": 3,
+        "seed_style": "dress"
+      },
+      {
+        "index": 2525,
+        "brand": "Ventus",
+        "model": "Mori",
+        "style": "diver",
+        "brand_category": "independent",
+        "price": 319.0,
+        "seed_set_id": 14,
+        "seed_position": 4,
+        "seed_style": "diver"
+      },
+      {
+        "index": 310,
+        "brand": "Boldr",
+        "model": "Venture",
+        "style": "field chronograph",
+        "brand_category": "independent",
+        "price": 339.0,
+        "seed_set_id": 14,
+        "seed_position": 5,
+        "seed_style": "field chronograph"
+      },
+      {
+        "index": 567,
+        "brand": "Elka Watch Co",
+        "model": "X09-0804",
+        "style": "pilot",
+        "brand_category": "independent",
+        "price": 1625.0,
+        "seed_set_id": 14,
+        "seed_position": 6,
+        "seed_style": "pilot"
+      }
+    ],
+    [
+      {
+        "index": 984,
+        "brand": "Halios Watches",
+        "model": "Seaforth",
+        "style": "12 hours",
+        "brand_category": "independent",
+        "price": 910.0,
+        "seed_set_id": 15,
+        "seed_position": 0,
+        "seed_style": "12 hours"
+      },
+      {
+        "index": 860,
+        "brand": "Dan Henry",
+        "model": "1972",
+        "style": "pilot chronograph",
+        "brand_category": "independent",
+        "price": 350.0,
+        "seed_set_id": 15,
+        "seed_position": 1,
+        "seed_style": "pilot chronograph"
+      },
+      {
+        "index": 2854,
+        "brand": "Vaer",
+        "model": "R1",
+        "style": "rally chronograph",
+        "brand_category": "independent",
+        "price": 449.0,
+        "seed_set_id": 15,
+        "seed_position": 2,
+        "seed_style": "rally chronograph"
+      },
+      {
+        "index": 1597,
+        "brand": "Oak & Oscar",
+        "model": "The Olmsted",
+        "style": "field",
+        "brand_category": "independent",
+        "price": 1725.0,
+        "seed_set_id": 15,
+        "seed_position": 3,
+        "seed_style": "field"
+      },
+      {
+        "index": 2131,
+        "brand": "Swiss Watch Company (SWC)",
+        "model": "Tremor",
+        "style": "diver",
+        "brand_category": "independent",
+        "price": 700.0,
+        "seed_set_id": 15,
+        "seed_position": 4,
+        "seed_style": "diver"
+      },
+      {
+        "index": 658,
+        "brand": "Formex",
+        "model": "Essence",
+        "style": "dress",
+        "brand_category": "independent",
+        "price": 1490.0,
+        "seed_set_id": 15,
+        "seed_position": 5,
+        "seed_style": "dress"
+      },
+      {
+        "index": 1848,
+        "brand": "Out Of Order",
+        "model": "Trecento",
+        "style": "gmt",
+        "brand_category": "independent",
+        "price": 990.0,
+        "seed_set_id": 15,
+        "seed_position": 6,
+        "seed_style": "gmt"
+      }
+    ],
+    [
+      {
+        "index": 300,
+        "brand": "Boldr",
+        "model": "Venture",
+        "style": "field",
+        "brand_category": "independent",
+        "price": 339.0,
+        "seed_set_id": 16,
+        "seed_position": 0,
+        "seed_style": "field"
+      },
+      {
+        "index": 862,
+        "brand": "Farer",
+        "model": "Monopusher",
+        "style": "gmt",
+        "brand_category": "independent",
+        "price": 2015.0,
+        "seed_set_id": 16,
+        "seed_position": 1,
+        "seed_style": "gmt"
+      },
+      {
+        "index": 1593,
+        "brand": "Nodus",
+        "model": "Sector",
+        "style": "diver gmt",
+        "brand_category": "independent",
+        "price": 550.0,
+        "seed_set_id": 16,
+        "seed_position": 2,
+        "seed_style": "diver gmt"
+      },
+      {
+        "index": 244,
+        "brand": "Astor Banks",
+        "model": "Sea Ranger",
+        "style": "tool",
+        "brand_category": "independent",
+        "price": 1395.0,
+        "seed_set_id": 16,
+        "seed_position": 3,
+        "seed_style": "tool"
+      },
+      {
+        "index": 1257,
+        "brand": "Hemel",
+        "model": "HF Series",
+        "style": "pilot chronograph",
+        "brand_category": "independent",
+        "price": 449.99,
+        "seed_set_id": 16,
+        "seed_position": 4,
+        "seed_style": "pilot chronograph"
+      },
+      {
+        "index": 2829,
+        "brand": "Vortic Watch Company",
+        "model": "The Chicago 331",
+        "style": "-",
+        "brand_category": "independent",
+        "price": 2500.0,
+        "seed_set_id": 16,
+        "seed_position": 5,
+        "seed_style": "-"
+      },
+      {
+        "index": 307,
+        "brand": "Baltic Watches",
+        "model": "Prismic",
+        "style": "dress",
+        "brand_category": "independent",
+        "price": 1155.0,
+        "seed_set_id": 16,
+        "seed_position": 6,
+        "seed_style": "dress"
+      }
+    ],
+    [
+      {
+        "index": 993,
+        "brand": "Halios Watches",
+        "model": "Seaforth",
+        "style": "12 hours",
+        "brand_category": "independent",
+        "price": 910.0,
+        "seed_set_id": 17,
+        "seed_position": 0,
+        "seed_style": "12 hours"
+      },
+      {
+        "index": 168,
+        "brand": "Aevig",
+        "model": "Thor",
+        "style": "dress",
+        "brand_category": "independent",
+        "price": 588.0,
+        "seed_set_id": 17,
+        "seed_position": 1,
+        "seed_style": "dress"
+      },
+      {
+        "index": 458,
+        "brand": "Dufrane",
+        "model": "Bergstrom",
+        "style": "pilot",
+        "brand_category": "independent",
+        "price": 799.0,
+        "seed_set_id": 17,
+        "seed_position": 2,
+        "seed_style": "pilot"
+      },
+      {
+        "index": 116,
+        "brand": "Boldr",
+        "model": "Venture",
+        "style": "field chronograph",
+        "brand_category": "independent",
+        "price": 319.0,
+        "seed_set_id": 17,
+        "seed_position": 3,
+        "seed_style": "field chronograph"
+      },
+      {
+        "index": 1216,
+        "brand": "Gruppo Gamma",
+        "model": "Nexus",
+        "style": "tool",
+        "brand_category": "independent",
+        "price": 800.0,
+        "seed_set_id": 17,
+        "seed_position": 4,
+        "seed_style": "tool"
+      },
+      {
+        "index": 1489,
+        "brand": "Maen",
+        "model": "Hudson 38",
+        "style": "diver gmt",
+        "brand_category": "independent",
+        "price": 1208.0,
+        "seed_set_id": 17,
+        "seed_position": 5,
+        "seed_style": "diver gmt"
+      },
+      {
+        "index": 2689,
+        "brand": "Vortic Watch Company",
+        "model": "The Chicago 439",
+        "style": "-",
+        "brand_category": "independent",
+        "price": 2500.0,
+        "seed_set_id": 17,
+        "seed_position": 6,
+        "seed_style": "-"
+      }
+    ],
+    [
+      {
+        "index": 2895,
+        "brand": "Ventus",
+        "model": "Mori 300m",
+        "style": "diver",
+        "brand_category": "independent",
+        "price": 349.0,
+        "seed_set_id": 18,
+        "seed_position": 0,
+        "seed_style": "diver"
+      },
+      {
+        "index": 322,
+        "brand": "Anordain",
+        "model": "Model 2",
+        "style": "field",
+        "brand_category": "independent",
+        "price": 2040.0,
+        "seed_set_id": 18,
+        "seed_position": 1,
+        "seed_style": "field"
+      },
+      {
+        "index": 1114,
+        "brand": "Gruppo Gamma",
+        "model": "Nexus",
+        "style": "tool",
+        "brand_category": "independent",
+        "price": 1250.0,
+        "seed_set_id": 18,
+        "seed_position": 2,
+        "seed_style": "tool"
+      },
+      {
+        "index": 22,
+        "brand": "Boldr",
+        "model": "Globetrotter",
+        "style": "diver gmt",
+        "brand_category": "independent",
+        "price": 899.0,
+        "seed_set_id": 18,
+        "seed_position": 3,
+        "seed_style": "diver gmt"
+      },
+      {
+        "index": 722,
+        "brand": "Elka Watch Co",
+        "model": "D07-0807",
+        "style": "dress",
+        "brand_category": "independent",
+        "price": 1625.0,
+        "seed_set_id": 18,
+        "seed_position": 4,
+        "seed_style": "dress"
+      },
+      {
+        "index": 336,
+        "brand": "Baltic Watches",
+        "model": "Aquascaphe",
+        "style": "gmt",
+        "brand_category": "independent",
+        "price": 1012.0,
+        "seed_set_id": 18,
+        "seed_position": 5,
+        "seed_style": "gmt"
+      },
+      {
+        "index": 1130,
+        "brand": "Hemel",
+        "model": "HF Series",
+        "style": "pilot chronograph",
+        "brand_category": "independent",
+        "price": 449.99,
+        "seed_set_id": 18,
+        "seed_position": 6,
+        "seed_style": "pilot chronograph"
+      }
+    ],
+    [
+      {
+        "index": 222,
+        "brand": "Boldr",
+        "model": "Venture",
+        "style": "field",
+        "brand_category": "independent",
+        "price": 299.0,
+        "seed_set_id": 19,
+        "seed_position": 0,
+        "seed_style": "field"
+      },
+      {
+        "index": 1689,
+        "brand": "Melbourne Watch Co",
+        "model": "Fitzroy",
+        "style": "12 hours",
+        "brand_category": "independent",
+        "price": 595.0,
+        "seed_set_id": 19,
+        "seed_position": 1,
+        "seed_style": "12 hours"
+      },
+      {
+        "index": 129,
+        "brand": "Astor Banks",
+        "model": "Sea Ranger",
+        "style": "tool",
+        "brand_category": "independent",
+        "price": 1395.0,
+        "seed_set_id": 19,
+        "seed_position": 2,
+        "seed_style": "tool"
+      },
+      {
+        "index": 2753,
+        "brand": "Vortic Watch Company",
+        "model": "The Springfield 363",
+        "style": "-",
+        "brand_category": "independent",
+        "price": 2600.0,
+        "seed_set_id": 19,
+        "seed_position": 3,
+        "seed_style": "-"
+      },
+      {
+        "index": 1810,
+        "brand": "Nodus",
+        "model": "Sector",
+        "style": "diver gmt",
+        "brand_category": "independent",
+        "price": 525.0,
+        "seed_set_id": 19,
+        "seed_position": 4,
+        "seed_style": "diver gmt"
+      },
+      {
+        "index": 1377,
+        "brand": "Geckota",
+        "model": "Chronotimer",
+        "style": "rally chronograph",
+        "brand_category": "independent",
+        "price": 399.0,
+        "seed_set_id": 19,
+        "seed_position": 5,
+        "seed_style": "rally chronograph"
+      },
+      {
+        "index": 712,
+        "brand": "Bravur Watches",
+        "model": "Grand Tour",
+        "style": "chronograph",
+        "brand_category": "independent",
+        "price": 2550.0,
+        "seed_set_id": 19,
+        "seed_position": 6,
+        "seed_style": "chronograph"
+      }
+    ]
+  ],
+  "generation_timestamp": 1748850032.0,
+  "num_sets": 20,
+  "seeds_per_set": 7,
+  "total_seeds": 140,
+  "version": "v2.0_multiple_sets",
+  "metadata": {
+    "generation_method": "style_diverse_sets",
+    "strategy": "maximize_style_diversity_per_set",
+    "diversity_optimized": true,
+    "set_based": true
+  }
+}
