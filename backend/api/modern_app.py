@@ -37,7 +37,7 @@ from models.modern_session_manager import ModernSessionManager
 
 # Configure enhanced logging
 logging.basicConfig(
-    level=logging.INFO,  # Changed back from DEBUG to INFO for cleaner logs
+    level=logging.DEBUG,  # Changed from INFO to DEBUG for detailed logs
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),

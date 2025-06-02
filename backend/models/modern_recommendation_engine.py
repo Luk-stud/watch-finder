@@ -49,7 +49,7 @@ import scipy.sparse as sp
 from scipy.special import softmax
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 def convert_to_json_serializable(obj):
