@@ -213,7 +213,12 @@ export class ApiService {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`;
+    // Remove /api from endpoint if base URL already includes it
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = this.baseUrl.endsWith('/api') 
+      ? `${this.baseUrl}${cleanEndpoint}`
+      : `${this.baseUrl}/api${cleanEndpoint}`;
+
     const defaultOptions: RequestInit = {
       headers: {
         'Content-Type': 'application/json',
@@ -222,13 +227,17 @@ export class ApiService {
     };
 
     try {
+      console.log(`🌐 Making API request to: ${url}`);  // Debug log
       const response = await fetch(url, defaultOptions);
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error(`❌ API Error: ${response.status} - ${errorText}`);  // Debug log
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
 
       const data = await response.json();
+      console.log(`✅ API Response:`, data);  // Debug log
 
       if (data.status === 'error') {
         // Handle session expiration
@@ -241,7 +250,7 @@ export class ApiService {
 
       return data;
     } catch (error) {
-      console.error(`API Error [${endpoint}]:`, error);
+      console.error(`❌ API Error [${endpoint}]:`, error);
       throw error;
     }
   }
