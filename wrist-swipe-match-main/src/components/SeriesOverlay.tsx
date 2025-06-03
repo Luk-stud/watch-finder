@@ -15,16 +15,16 @@ const SeriesOverlay: React.FC<SeriesOverlayProps> = ({ series, watches = [], onC
         {/* Header */}
         <div className="p-6 border-b border-gray-700">
           <div className="flex justify-between items-center">
-            <div>
+          <div>
               <h2 className="text-2xl font-bold text-white mb-1">{series} Series</h2>
               <p className="text-gray-400">{watches.length} watches in this series</p>
-            </div>
-            <button
-              onClick={onClose}
+          </div>
+          <button
+            onClick={onClose}
               className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
-            >
+          >
               <X className="w-6 h-6" />
-            </button>
+          </button>
           </div>
         </div>
 
@@ -81,10 +81,10 @@ const WatchSeriesCard: React.FC<WatchSeriesCardProps> = ({ watch }) => {
             <div className="text-black font-bold text-sm">{watch.brand}</div>
             <div className="text-black text-xs">{watch.model}</div>
           </div>
-        </div>
-      </div>
+                  </div>
+                </div>
 
-      {/* Watch Info */}
+                {/* Watch Info */}
       <div className="space-y-2">
         <h3 className="text-white font-semibold text-lg truncate">{watch.model}</h3>
         <p className="text-yellow-400 font-medium">{watch.brand}</p>
@@ -116,7 +116,7 @@ const WatchSeriesCard: React.FC<WatchSeriesCardProps> = ({ watch }) => {
           {watch.specs?.availability && watch.specs.availability !== '-' && (
             <p className="text-gray-400 text-xs">{watch.specs.availability}</p>
           )}
-        </div>
+                </div>
 
         {/* Additional info badges */}
         <div className="flex flex-wrap gap-1 pt-2">
@@ -143,7 +143,7 @@ const WatchSeriesCard: React.FC<WatchSeriesCardProps> = ({ watch }) => {
               SEED
             </span>
           )}
-        </div>
+              </div>
 
         {/* Brand website link */}
         {watch.specs?.brand_website && watch.specs.brand_website !== '-' && (

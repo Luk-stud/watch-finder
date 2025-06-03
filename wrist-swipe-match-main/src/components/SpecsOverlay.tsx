@@ -24,12 +24,12 @@ const SpecsOverlay: React.FC<SpecsOverlayProps> = ({ watch, onClose }) => {
                 <p className="text-gray-400 text-sm">{watch.specs.serie} Series</p>
               )}
             </div>
-            <button
-              onClick={onClose}
+          <button
+            onClick={onClose}
               className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
-            >
+          >
               <X className="w-6 h-6" />
-            </button>
+          </button>
           </div>
         </div>
 

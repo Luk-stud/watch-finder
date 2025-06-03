@@ -1,0 +1,40 @@
+{
+  "total_watches": 3320,
+  "watches_with_color": 277,
+  "color_mentions": {
+    "white": 12,
+    "blue": 194,
+    "bronze": 9,
+    "black": 63,
+    "green": 15,
+    "titanium": 7,
+    "rose gold": 2,
+    "silver": 6,
+    "red": 5,
+    "brown": 5,
+    "purple": 1,
+    "grey": 5,
+    "orange": 1,
+    "pink": 2,
+    "gold": 8,
+    "yellow": 1
+  },
+  "color_contexts": {
+    "white": "Aquatico Super Marine dive watch White dial Blue Bezel (SW 200-1)(Launch Special)",
+    "blue": "Aquatico Super Marine dive watch White dial Blue Bezel (SW 200-1)(Launch Special)",
+    "bronze": "Aquatico Super Star Bronze Tritium Black Dial(SWISS MADE ETA2824-2) No Date",
+    "black": "Aquatico Super Star Bronze Tritium Black Dial(SWISS MADE ETA2824-2) No Date",
+    "green": "Aquatico Steel Man Green Dial Ceramic Bezel Watch (NH35)",
+    "titanium": "Deep Blue Daynight Titanium Tritium T-100",
+    "rose gold": "Magrette Timepieces Track Day - Rose Gold",
+    "silver": "Magrette Timepieces Track Day - Blue & Silver",
+    "red": "Steinhart Ocean 39 Metropole red",
+    "brown": "Squale Super- Sunray Brown Bracelet",
+    "purple": "Steinhart Ocean 39 Metropole sunray purple",
+    "grey": "Squale Matic Grey Mesh",
+    "orange": "Squale T-183 Forged Carbon Orange",
+    "pink": "Steinhart Ocean 39 PINK-GOLD Ceramic Diver Watch",
+    "gold": "Steinhart Ocean 39 PINK-GOLD Ceramic Diver Watch",
+    "yellow": "Steinhart Ocean 39 Metropole yellow"
+  }
+}

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import WatchCard from '../components/WatchCard';
 import SpecsOverlay from '../components/SpecsOverlay';
 import SeriesOverlay from '../components/SeriesOverlay';
+import VariantsOverlay from '../components/VariantsOverlay';
 import { Watch, formatPrice } from '../data/watchData';
 import { apiService } from '../lib/api';
 import { useViewportHeight } from '../hooks/useViewportHeight';
@@ -11,16 +12,18 @@ import { Heart, X, Loader2, AlertTriangle } from 'lucide-react';
 const Index = () => {
   const [currentWatches, setCurrentWatches] = useState<Watch[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [showSpecs, setShowSpecs] = useState(false);
-  const [showSeries, setShowSeries] = useState(false);
-  const [selectedWatch, setSelectedWatch] = useState<Watch | null>(null);
-  const [seriesWatches, setSeriesWatches] = useState<Watch[]>([]);
   const [likedWatches, setLikedWatches] = useState<Watch[]>([]);
   const [dislikedWatches, setDislikedWatches] = useState<Watch[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  
+  // Overlay states
+  const [showSpecs, setShowSpecs] = useState(false);
+  const [showVariants, setShowVariants] = useState(false);
+  const [selectedWatch, setSelectedWatch] = useState<Watch | null>(null);
+  const [variantWatches, setVariantWatches] = useState<Watch[]>([]);
 
   // Use the viewport height hook for mobile browser compatibility
   useViewportHeight();
@@ -129,11 +132,11 @@ const Index = () => {
       );
 
       // Update local state
-      if (direction === 'right') {
-        setLikedWatches(prev => [...prev, currentWatch]);
-      } else {
-        setDislikedWatches(prev => [...prev, currentWatch]);
-      }
+    if (direction === 'right') {
+      setLikedWatches(prev => [...prev, currentWatch]);
+    } else {
+      setDislikedWatches(prev => [...prev, currentWatch]);
+    }
 
       // Move to next watch or get more recommendations
       if (currentIndex < currentWatches.length - 1) {
@@ -160,7 +163,7 @@ const Index = () => {
       // Still move to next watch even if feedback fails
       setTimeout(() => {
         if (currentIndex < currentWatches.length - 1) {
-          setCurrentIndex(prev => prev + 1);
+    setCurrentIndex(prev => prev + 1);
         }
         setIsTransitioning(false);
       }, 100);
@@ -172,20 +175,20 @@ const Index = () => {
     setShowSpecs(true);
   };
 
-  const handleSeriesClick = async (watch: Watch) => {
+  const handleVariantsClick = async (watch: Watch) => {
     try {
       setIsLoading(true);
-      const response = await apiService.getSeries(watch.index);
+      const response = await apiService.getVariants(watch.index);
       
-      if (response.status === 'success' && response.series_watches.length > 1) {
+      if (response.status === 'success' && response.variants.length > 1) {
         setSelectedWatch(watch);
-        setSeriesWatches(response.series_watches);
-        setShowSeries(true);
+        setVariantWatches(response.variants);
+        setShowVariants(true);
       } else {
-        console.log('No series found or only one watch in series');
+        console.log('No variants found or only one variant exists');
       }
     } catch (err) {
-      console.error('Error getting series:', err);
+      console.error('Error getting variants:', err);
     } finally {
       setIsLoading(false);
     }
@@ -290,40 +293,40 @@ const Index = () => {
           {currentWatches.length > 0 && currentIndex < currentWatches.length && (
             <>
               {/* Preview cards (behind current card) with real watch data */}
-              {[2, 1].map((offset) => {
-                const previewIndex = currentIndex + offset;
+          {[2, 1].map((offset) => {
+            const previewIndex = currentIndex + offset;
                 const previewWatch = currentWatches[previewIndex];
                 if (!previewWatch) return null;
-                
-                return (
-                  <div
+            
+            return (
+              <div
                     key={`preview-${previewIndex}-${previewWatch.index}`}
                     className="absolute inset-0 w-full pointer-events-none"
-                    style={{
-                      transform: `scale(${1 - offset * 0.05}) translateY(${offset * 8}px)`,
-                      zIndex: -offset,
-                      opacity: 1 - offset * 0.3
-                    }}
-                  >
+                style={{
+                  transform: `scale(${1 - offset * 0.05}) translateY(${offset * 8}px)`,
+                  zIndex: -offset,
+                  opacity: 1 - offset * 0.3
+                }}
+              >
                     <WatchCard
                       watch={previewWatch}
                       onSwipe={() => {}} // Disabled for preview cards
                       onSpecsClick={() => {}} // Disabled for preview cards
-                      onSeriesClick={() => {}} // Disabled for preview cards
+                      onVariantsClick={() => {}} // Disabled for preview cards
                     />
-                  </div>
-                );
-              })}
+              </div>
+            );
+          })}
 
-              {/* Current card */}
-              {currentWatch && (
+          {/* Current card */}
+          {currentWatch && (
                 <div key={`current-${currentIndex}-${currentWatch.index}`} className="relative z-10 h-full">
-                  <WatchCard
-                    watch={currentWatch}
-                    onSwipe={handleSwipe}
-                    onSpecsClick={handleSpecsClick}
-                    onSeriesClick={handleSeriesClick}
-                  />
+            <WatchCard
+              watch={currentWatch}
+              onSwipe={handleSwipe}
+              onSpecsClick={handleSpecsClick}
+              onVariantsClick={handleVariantsClick}
+            />
                 </div>
               )}
             </>
@@ -378,11 +381,11 @@ const Index = () => {
         />
       )}
 
-      {showSeries && selectedWatch && (
-        <SeriesOverlay
-          series={selectedWatch.specs?.serie || selectedWatch.brand}
-          watches={seriesWatches}
-          onClose={() => setShowSeries(false)}
+      {showVariants && selectedWatch && (
+        <VariantsOverlay
+          watch={selectedWatch}
+          variants={variantWatches}
+          onClose={() => setShowVariants(false)}
         />
       )}
     </div>

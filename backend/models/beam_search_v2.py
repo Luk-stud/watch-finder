@@ -21,6 +21,7 @@ import os
 from collections import defaultdict, deque
 from sklearn.metrics import silhouette_score
 import pickle
+import re
 
 # Add current directory to path for variant_detector import
 sys.path.append(os.path.dirname(__file__))
@@ -106,6 +107,9 @@ class EnhancedWatchBeamSearch:
         
         # 🆕 Load precomputed smart seeds (fast operation)
         self._load_precomputed_smart_seeds()
+        
+        # 🆕 VARIANT FILTERING SETUP (Similar to ModernRecommendationEngine)
+        self._initialize_variant_filter()
         
         # Performance tracking
         self.performance_metrics = {
@@ -270,15 +274,18 @@ class EnhancedWatchBeamSearch:
         """Initialize multi-level clustering for hierarchical search."""
         try:
             # Style-based clustering (20 clusters)
-            self.style_clusters = KMeans(n_clusters=20, random_state=42).fit_predict(self.normalized_embeddings)
+            n_style = min(20, max(2, len(self.normalized_embeddings)//10))
+            self.style_clusters = KMeans(n_clusters=n_style, random_state=42, n_init=10).fit_predict(self.normalized_embeddings)
             
             # Brand-based clustering (15 clusters)
             brand_features = self._create_brand_feature_matrix()
-            self.brand_clusters = KMeans(n_clusters=15, random_state=43).fit_predict(brand_features)
+            n_brand = min(15, max(2, len(set(w['brand'] for w in self.watch_data))))
+            self.brand_clusters = KMeans(n_clusters=n_brand, random_state=43, n_init=10).fit_predict(brand_features)
             
             # Aesthetic clustering using description embeddings (10 clusters)
             aesthetic_features = self._create_aesthetic_feature_matrix()
-            self.aesthetic_clusters = KMeans(n_clusters=10, random_state=44).fit_predict(aesthetic_features)
+            n_aesthetic = min(10, max(2, len(aesthetic_features)//20))
+            self.aesthetic_clusters = KMeans(n_clusters=n_aesthetic, random_state=44, n_init=10).fit_predict(aesthetic_features)
             
             # Create cluster mappings
             self.cluster_mappings = {
@@ -292,13 +299,19 @@ class EnhancedWatchBeamSearch:
                 self.cluster_mappings['brand'][self.brand_clusters[i]].append(i)
                 self.cluster_mappings['aesthetic'][self.aesthetic_clusters[i]].append(i)
             
-            print(f"Enhanced clustering: 20 style + 15 brand + 10 aesthetic clusters")
+            print(f"Enhanced clustering: {n_style} style + {n_brand} brand + {n_aesthetic} aesthetic clusters")
             
         except Exception as e:
             print(f"Error in enhanced clustering: {e}")
             # Fallback to simple clustering
-            self.style_clusters = np.zeros(len(self.watch_data))
-            self.cluster_mappings = {'style': {0: list(range(len(self.watch_data)))}}
+            self.style_clusters = np.zeros(len(self.watch_data), dtype=int)
+            self.brand_clusters = np.zeros(len(self.watch_data), dtype=int)
+            self.aesthetic_clusters = np.zeros(len(self.watch_data), dtype=int)
+            self.cluster_mappings = {
+                'style': {0: list(range(len(self.watch_data)))},
+                'brand': {0: list(range(len(self.watch_data)))},
+                'aesthetic': {0: list(range(len(self.watch_data)))}
+            }
     
     def _create_brand_feature_matrix(self) -> np.ndarray:
         """Create feature matrix based on brand characteristics."""
@@ -561,17 +574,32 @@ class EnhancedWatchBeamSearch:
         except:
             filtered_candidates = [idx for idx, _ in selected_candidates]
         
-        # 🆕 FINAL DUPLICATE VALIDATION - Ensure no duplicates in results
-        final_candidates = []
+        # 🆕 APPLY ADDITIONAL VARIANT FILTERING
+        # Convert indices to watch objects for filtering
+        candidate_watches_for_filtering = []
         for idx in filtered_candidates:
-            if idx not in self.seen_watches and idx not in final_candidates:
-                final_candidates.append(idx)
+            if 0 <= idx < len(self.watch_data):
+                watch = self.watch_data[idx].copy()
+                watch['index'] = idx
+                candidate_watches_for_filtering.append(watch)
+        
+        # Apply our efficient variant filtering
+        candidate_watches_for_filtering = self._filter_variant_duplicates_beam(candidate_watches_for_filtering)
+        
+        # Extract final candidate indices
+        final_candidates = [w['index'] for w in candidate_watches_for_filtering]
+        
+        # 🆕 FINAL DUPLICATE VALIDATION - Ensure no duplicates in results
+        final_unique_candidates = []
+        for idx in final_candidates:
+            if idx not in self.seen_watches and idx not in final_unique_candidates:
+                final_unique_candidates.append(idx)
         
         # Build result watches with enhanced duplicate prevention
         result_watches = []
         added_indices = set()
         
-        for idx in final_candidates[:min(10, len(final_candidates))]:
+        for idx in final_unique_candidates[:min(10, len(final_unique_candidates))]:
             if 0 <= idx < len(self.watch_data) and idx not in added_indices:
                 # 🆕 TRIPLE CHECK - Final validation before adding
                 if idx in self.seen_watches:
@@ -585,6 +613,7 @@ class EnhancedWatchBeamSearch:
                 # 🆕 ADD UNIQUENESS METADATA
                 watch['recommendation_step'] = step
                 watch['seen_count'] = len(self.seen_watches)
+                watch['variant_filtered'] = True  # Indicate this went through variant filtering
                 
                 result_watches.append(watch)
                 added_indices.add(idx)
@@ -1220,17 +1249,32 @@ class EnhancedWatchBeamSearch:
         except:
             filtered_candidates = selected_indices
         
-        # 🆕 ENHANCED DUPLICATE VALIDATION for multi-modal
-        final_candidates = []
+        # 🆕 APPLY ADDITIONAL VARIANT FILTERING FOR MULTI-MODAL
+        # Convert indices to watch objects for filtering
+        candidate_watches_for_filtering = []
         for idx in filtered_candidates:
-            if idx not in self.seen_watches and idx not in final_candidates:
-                final_candidates.append(idx)
+            if 0 <= idx < len(self.watch_data):
+                watch = self.watch_data[idx].copy()
+                watch['index'] = idx
+                candidate_watches_for_filtering.append(watch)
+        
+        # Apply our efficient variant filtering
+        candidate_watches_for_filtering = self._filter_variant_duplicates_beam(candidate_watches_for_filtering)
+        
+        # Extract final candidate indices
+        final_candidates = [w['index'] for w in candidate_watches_for_filtering]
+        
+        # 🆕 ENHANCED DUPLICATE VALIDATION for multi-modal
+        final_unique_candidates = []
+        for idx in final_candidates:
+            if idx not in self.seen_watches and idx not in final_unique_candidates:
+                final_unique_candidates.append(idx)
         
         # Build result watches with mode information and enhanced duplicate prevention
         result_watches = []
         added_indices = set()
         
-        for idx in final_candidates[:total_candidates_needed]:
+        for idx in final_unique_candidates[:total_candidates_needed]:
             if 0 <= idx < len(self.watch_data) and idx not in added_indices:
                 # 🆕 TRIPLE CHECK for multi-modal 
                 if idx in self.seen_watches:
@@ -1250,6 +1294,7 @@ class EnhancedWatchBeamSearch:
                 watch['recommendation_step'] = step
                 watch['seen_count'] = len(self.seen_watches)
                 watch['is_multi_modal'] = True
+                watch['variant_filtered'] = True  # Indicate this went through variant filtering
                 
                 result_watches.append(watch)
                 added_indices.add(idx)
@@ -1355,4 +1400,126 @@ class EnhancedWatchBeamSearch:
         # Sort by model name for consistency
         series_watches.sort(key=lambda w: w.get('model', ''))
         
-        return series_watches 
+        return series_watches
+
+    def _initialize_variant_filter(self):
+        """Initialize efficient variant filtering using brand/model analysis."""
+        print("🔧 Initializing variant filtering system for beam search...")
+        
+        # Build brand-model mapping for fast lookups
+        self.brand_model_map = defaultdict(set)
+        self.watch_signatures = {}  # watch_index -> (brand, base_model) tuple
+        
+        # Process all watches to create variant signatures
+        for i, watch in enumerate(self.watch_data):
+            brand = self._normalize_brand_name(watch.get('brand', ''))
+            model = self._extract_base_model_name(watch.get('model', watch.get('model_name', '')))
+            
+            signature = (brand, model)
+            self.watch_signatures[i] = signature
+            self.brand_model_map[brand].add(model)
+        
+        # Calculate variant statistics
+        total_signatures = len(set(self.watch_signatures.values()))
+        total_watches = len(self.watch_data)
+        unique_brands = len(self.brand_model_map)
+        
+        print(f"✅ Beam search variant filtering initialized:")
+        print(f"   📊 {total_watches} watches → {total_signatures} unique signatures")
+        print(f"   🏷️  {unique_brands} unique brands")
+        print(f"   🔄 Variant reduction: {((total_watches - total_signatures) / total_watches * 100):.1f}%")
+
+    def _normalize_brand_name(self, brand: str) -> str:
+        """Normalize brand name for consistent matching."""
+        if not brand:
+            return 'unknown'
+        
+        normalized = brand.lower().strip()
+        
+        # Handle common brand name variations
+        brand_normalizations = {
+            'tag heuer': 'tagheuer',
+            'a. lange & söhne': 'alangesoehne',
+            'a. lange & sohne': 'alangesoehne',
+            'audemars piguet': 'audemarspiguet',
+            'vacheron constantin': 'vacheroncastantin',
+            'patek philippe': 'patekphilippe',
+            'franck muller': 'franckmuller',
+            'frederique constant': 'frederiqueconstant',
+        }
+        
+        return brand_normalizations.get(normalized, normalized)
+
+    def _extract_base_model_name(self, model: str) -> str:
+        """Extract base model name, removing variant indicators."""
+        if not model or model.lower() in ['-', 'n/a', 'unknown', '']:
+            return 'generic'
+        
+        base_name = model.lower().strip()
+        
+        # Remove common variant indicators
+        variant_patterns = [
+            r'\s*\([^)]*\).*$',     # Remove parenthetical info and everything after
+            r'\s*-\s*\d+mm.*$',     # Remove size specifications like "- 42mm"
+            r'\s*\d+mm.*$',         # Remove size specifications like "42mm"
+            r'\s*-\s*steel.*$',     # Remove material specifications
+            r'\s*-\s*gold.*$',      # Remove material specifications
+            r'\s*-\s*titanium.*$',  # Remove material specifications
+            r'\s*-\s*black.*$',     # Remove color specifications
+            r'\s*-\s*white.*$',     # Remove color specifications
+            r'\s*-\s*blue.*$',      # Remove color specifications
+            r'\s*-\s*silver.*$',    # Remove color specifications
+            r'\s*\|.*$',            # Remove pipe and everything after
+            r'\s*with.*$',          # Remove "with..." and after
+            r'\s*featuring.*$',     # Remove "featuring..." and after
+        ]
+        
+        for pattern in variant_patterns:
+            base_name = re.sub(pattern, '', base_name, flags=re.IGNORECASE)
+        
+        return base_name.strip() or 'generic'
+
+    def _filter_variant_duplicates_beam(self, candidate_watches: List[Dict[str, Any]], 
+                                       lookback_count: int = 8) -> List[Dict[str, Any]]:
+        """Filter out variant duplicates from candidate watches for beam search."""
+        if not candidate_watches:
+            return candidate_watches
+        
+        # Track what we've already added in this batch
+        batch_signatures = set()
+        filtered_watches = []
+        
+        for watch in candidate_watches:
+            watch_index = watch.get('index')
+            if watch_index is None or watch_index not in self.watch_signatures:
+                filtered_watches.append(watch)
+                continue
+            
+            signature = self.watch_signatures[watch_index]
+            
+            # Check against recently seen watches (using beam search's seen_watches)
+            is_variant_of_seen = False
+            for seen_index in list(self.seen_watches)[-lookback_count:]:
+                if seen_index in self.watch_signatures:
+                    seen_signature = self.watch_signatures[seen_index]
+                    if signature == seen_signature:
+                        is_variant_of_seen = True
+                        break
+            
+            if is_variant_of_seen:
+                print(f"🚫 Beam search filtered recent variant: {signature}")
+                continue
+            
+            # Check against current batch
+            if signature in batch_signatures:
+                print(f"🚫 Beam search filtered batch variant: {signature}")
+                continue
+            
+            # Add to filtered list and track signature
+            filtered_watches.append(watch)
+            batch_signatures.add(signature)
+        
+        if len(filtered_watches) < len(candidate_watches):
+            print(f"🎯 Beam search variant filtering: {len(candidate_watches)} → {len(filtered_watches)} watches")
+        
+        return filtered_watches 

@@ -1,5 +1,8 @@
 // API Service for Watch Finder Modern Backend
 
+import { ENV_CONFIG, shouldDebugLog } from '../config/environment';
+import { findWorkingApiUrl } from '../utils/connectionTest';
+
 // Vite environment variable access
 declare global {
   interface ImportMetaEnv {
@@ -175,49 +178,139 @@ export interface SeriesResponse {
   series_watches: ModernWatch[];
 }
 
-// Flexible API URL configuration for different development scenarios
-const getApiBaseUrl = (): string => {
-  // Check environment variable first
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
-  }
-  
-  // Auto-detect based on current host
-  if (typeof window !== 'undefined') {
-    const currentHost = window.location.hostname;
-    
-    // If running on network IP, use the same IP for backend
-    if (currentHost !== 'localhost' && currentHost !== '127.0.0.1') {
-      return `http://${currentHost}:5001/api`;
-    }
-    
-    // Default for localhost
-    return 'http://localhost:5001/api';
-  }
-  
-  // Server-side fallback
-  return 'http://localhost:5001/api';
-};
+export interface VariantsResponse {
+  status: 'success' | 'error';
+  watch_index: number;
+  target_watch: ModernWatch;
+  brand: string;
+  model: string;
+  signature: string;
+  variant_count: number;
+  variants: ModernWatch[];
+  info: string;
+}
 
-const API_BASE_URL = getApiBaseUrl();
+// Use environment configuration
+const API_BASE_URL = ENV_CONFIG.API_BASE_URL;
 
 export class ApiService {
   private baseUrl: string;
   private sessionId: string | null = null;
+  private fallbackUrls: string[] = [];
+  private hasTestedConnections: boolean = false;
 
   constructor(baseUrl: string = API_BASE_URL) {
     this.baseUrl = baseUrl;
+    
+    // Setup fallback URLs from environment configuration
+    this.fallbackUrls = ENV_CONFIG.FALLBACK_URLS;
+    
+    // If the primary URL contains an unknown IP, fix it immediately
+    if (this.baseUrl.includes('192.168.0.209')) {
+      console.warn('🔧 Detected wrong IP in primary URL, switching to localhost');
+      this.baseUrl = 'http://localhost:5001/api';
+    }
+    
+    if (shouldDebugLog()) {
+      console.log(`🔧 API Service initialized:`);
+      console.log(`   Primary URL: ${this.baseUrl}`);
+      console.log(`   Fallback URLs:`, this.fallbackUrls);
+    }
   }
 
-  private async request<T = unknown>(
+  private async findBestApiUrl(): Promise<string | null> {
+    if (this.hasTestedConnections) {
+      return null; // Don't test multiple times
+    }
+    
+    this.hasTestedConnections = true;
+    
+    const candidateUrls = [this.baseUrl, ...this.fallbackUrls];
+    if (shouldDebugLog()) {
+      console.log('🔍 Testing API connections to find working endpoint...');
+    }
+    
+    const workingUrl = await findWorkingApiUrl(candidateUrls);
+    
+    if (workingUrl && workingUrl !== this.baseUrl) {
+      if (shouldDebugLog()) {
+        console.log(`🎯 Found working API URL: ${workingUrl}`);
+      }
+      this.baseUrl = workingUrl;
+      return workingUrl;
+    }
+    
+    return null;
+  }
+
+  private async requestWithFallback<T = unknown>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<T> {
+    // Try primary URL first
+    try {
+      return await this.makeRequest<T>(this.baseUrl, endpoint, options);
+    } catch (primaryError) {
+      if (shouldDebugLog()) {
+        console.warn(`❌ Primary URL failed (${this.baseUrl}):`, primaryError);
+      }
+      
+      // Try fallback URLs if available
+      for (let i = 0; i < this.fallbackUrls.length; i++) {
+        const fallbackUrl = this.fallbackUrls[i];
+        if (shouldDebugLog()) {
+          console.log(`🔄 Trying fallback URL ${i + 1}/${this.fallbackUrls.length}: ${fallbackUrl}`);
+        }
+        
+        try {
+          const result = await this.makeRequest<T>(fallbackUrl, endpoint, options);
+          if (shouldDebugLog()) {
+            console.log(`✅ Fallback URL ${i + 1} succeeded! Updating primary URL.`);
+          }
+          
+          // Update primary URL for future requests
+          this.baseUrl = fallbackUrl;
+          return result;
+        } catch (fallbackError) {
+          if (shouldDebugLog()) {
+            console.warn(`❌ Fallback URL ${i + 1} failed:`, fallbackError);
+          }
+        }
+      }
+      
+      // If all fallbacks failed, try to find a working URL via connection testing
+      if (!this.hasTestedConnections) {
+        if (shouldDebugLog()) {
+          console.log('🔍 All URLs failed, running connection diagnostics...');
+        }
+        
+        const workingUrl = await this.findBestApiUrl();
+        if (workingUrl) {
+          try {
+            return await this.makeRequest<T>(workingUrl, endpoint, options);
+          } catch (testError) {
+            if (shouldDebugLog()) {
+              console.warn('❌ Even the tested URL failed:', testError);
+            }
+          }
+        }
+      }
+      
+      // If everything failed, throw the original error
+      throw primaryError;
+    }
+  }
+
+  private async makeRequest<T = unknown>(
+    baseUrl: string,
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
     // Remove /api from endpoint if base URL already includes it
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    const url = this.baseUrl.endsWith('/api') 
-      ? `${this.baseUrl}${cleanEndpoint}`
-      : `${this.baseUrl}/api${cleanEndpoint}`;
+    const url = baseUrl.endsWith('/api') 
+      ? `${baseUrl}${cleanEndpoint}`
+      : `${baseUrl}/api${cleanEndpoint}`;
 
     const defaultOptions: RequestInit = {
       headers: {
@@ -226,29 +319,42 @@ export class ApiService {
       ...options,
     };
 
+    if (shouldDebugLog()) {
+      console.log(`🌐 Making API request to: ${url}`);
+    }
+    const response = await fetch(url, defaultOptions);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      if (shouldDebugLog()) {
+        console.error(`❌ API Error: ${response.status} - ${errorText}`);
+      }
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    if (shouldDebugLog()) {
+      console.log(`✅ API Response:`, data);
+    }
+
+    if (data.status === 'error') {
+      // Handle session expiration
+      if (data.error_type === 'session_expired') {
+        this.sessionId = null;
+        throw new Error('Session expired. Please start a new session.');
+      }
+      throw new Error(data.message || 'API request failed');
+    }
+
+    return data;
+  }
+
+  private async request<T = unknown>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<T> {
     try {
-      console.log(`🌐 Making API request to: ${url}`);  // Debug log
-      const response = await fetch(url, defaultOptions);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`❌ API Error: ${response.status} - ${errorText}`);  // Debug log
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
-      }
-
-      const data = await response.json();
-      console.log(`✅ API Response:`, data);  // Debug log
-
-      if (data.status === 'error') {
-        // Handle session expiration
-        if (data.error_type === 'session_expired') {
-          this.sessionId = null;
-          throw new Error('Session expired. Please start a new session.');
-        }
-        throw new Error(data.message || 'API request failed');
-      }
-
-      return data;
+      return await this.requestWithFallback<T>(endpoint, options);
     } catch (error) {
       console.error(`❌ API Error [${endpoint}]:`, error);
       throw error;
@@ -372,6 +478,14 @@ export class ApiService {
     };
   }> {
     return this.request('/diagnostics');
+  }
+
+  async getVariants(watchIndex: number): Promise<VariantsResponse> {
+    if (!this.sessionId) {
+      throw new Error('No active session. Please start a new session.');
+    }
+
+    return this.request(`/get-variants/${watchIndex}`);
   }
 }
 

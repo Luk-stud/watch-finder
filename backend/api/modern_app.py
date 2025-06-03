@@ -320,17 +320,17 @@ def start_session():
 
 @app.route('/api/get-recommendations', methods=['POST'])
 def get_recommendations():
-    """Get recommendations using the modern ML engine."""
+    """Get personalized watch recommendations using modern ML techniques."""
     try:
-        if session_manager is None:
-            return jsonify({'status': 'error', 'message': 'System not initialized'}), 503
+        if not session_manager:
+            return jsonify({
+                'status': 'error',
+                'message': 'Session manager not initialized'
+            }), 500
         
-        # Parse request data
-        data = request.get_json()
-        if not data:
-            return jsonify({'status': 'error', 'message': 'No data provided'}), 400
+        data = request.json or {}
         
-        # Extract parameters
+        # Extract request parameters
         session_id = data.get('session_id')
         liked_indices = data.get('liked_indices', [])
         disliked_indices = data.get('disliked_indices', [])
@@ -339,49 +339,138 @@ def get_recommendations():
         step = data.get('step', 1)
         
         if not session_id:
-            return jsonify({'status': 'error', 'message': 'Session ID required'}), 400
-        
-        logger.info(f"🔍 Getting recommendations for session {session_id} (step {step})")
-        logger.info(f"📊 Feedback: {len(liked_indices)} likes, {len(disliked_indices)} dislikes")
-        
-        # Get recommendations asynchronously
+            return jsonify({
+                'status': 'error',
+                'message': 'session_id is required'
+            }), 400
+
         async def get_recommendations_async():
-            return await session_manager.get_recommendations(
-                session_id=session_id,
-                liked_indices=liked_indices,
-                disliked_indices=disliked_indices,
-                current_candidates=current_candidates,
-                num_recommendations=num_recommendations,
-                step=step
-            )
-        
-        # Run async operation
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            response = loop.run_until_complete(get_recommendations_async())
-        finally:
-            loop.close()
-        
-        logger.info(f"✅ Generated {len(response.get('recommendations', []))} recommendations for session {session_id}")
-        
-        return jsonify(response)
-        
-    except ValueError as ve:
-        logger.warning(f"Invalid request for recommendations: {ve}")
-        return jsonify({
-            'status': 'error',
-            'message': str(ve),
-            'error_type': 'invalid_session'
-        }), 400
+            try:
+                # Create recommendation request
+                from models.modern_recommendation_engine import RecommendationRequest
+                request_obj = RecommendationRequest(
+                    user_id=session_id,
+                    liked_indices=liked_indices,
+                    disliked_indices=disliked_indices,
+                    current_candidates=current_candidates,
+                    num_recommendations=num_recommendations,
+                    exploration_factor=0.3,
+                    diversity_threshold=0.7
+                )
+                
+                # Get recommendations
+                result = await session_manager.recommendation_engine.get_recommendations(request_obj)
+                
+                # 🆕 ENHANCED STRATEGY AND MODE INFORMATION
+                # Get user state for detailed mode information
+                user_state = session_manager.recommendation_engine._get_user_state(session_id)
+                feedback_count = len(user_state['feedback_history'])
+                likes_count = sum(1 for f in user_state['feedback_history'] if f['type'] == 'like')
+                preference_clusters = user_state['preference_clusters']
+                
+                # Calculate cluster strength and details
+                cluster_details = []
+                total_cluster_strength = 0
+                for i, cluster in enumerate(preference_clusters):
+                    strength = cluster.get_strength()
+                    total_cluster_strength += strength
+                    cluster_details.append({
+                        'cluster_id': i,
+                        'strength': strength,
+                        'preference_count': len(cluster.preferences),
+                        'last_updated': cluster.last_updated.isoformat(),
+                        'activation_count': cluster.activation_count
+                    })
+                
+                # Determine current mode with detailed explanation
+                current_strategy = result.algorithm_used
+                strategy_explanation = ""
+                
+                if current_strategy == 'cold_start':
+                    strategy_explanation = f"Cold start mode - building initial preference profile ({feedback_count} interactions)"
+                elif current_strategy == 'preference_based':
+                    strategy_explanation = f"Preference-based mode - using {len(preference_clusters)} preference clusters (strength: {total_cluster_strength:.2f})"
+                elif current_strategy == 'exploration':
+                    strategy_explanation = f"Exploration mode - discovering new styles and brands"
+                elif current_strategy == 'hybrid':
+                    strategy_explanation = f"Hybrid mode - balancing preferences ({likes_count} likes) with exploration"
+                
+                # Check if clustering is being used
+                clustering_status = {
+                    'is_using_clusters': len(preference_clusters) > 0,
+                    'cluster_count': len(preference_clusters),
+                    'total_cluster_strength': total_cluster_strength,
+                    'cluster_details': cluster_details
+                }
+                
+                # Check exploration level
+                seen_watches = len(user_state['seen_watches'])
+                total_watches = len(session_manager.recommendation_engine.watch_data)
+                exploration_percentage = (seen_watches / total_watches * 100) if total_watches > 0 else 0
+                
+                exploration_status = {
+                    'exploration_percentage': exploration_percentage,
+                    'seen_watches': seen_watches,
+                    'total_watches': total_watches,
+                    'exploration_level': 'high' if exploration_percentage > 50 else 'medium' if exploration_percentage > 20 else 'low',
+                    'engagement_level': user_state['engagement_level']
+                }
+                
+                return {
+                    'status': 'success',
+                    'recommendations': result.watches,
+                    'step': step,
+                    'session_id': session_id,
+                    'generated_at': datetime.now().isoformat(),
+                    'processing_time': result.processing_time,
+                    'confidence_scores': result.confidence_scores,
+                    'diversity_score': result.diversity_score,
+                    'exploration_rate': result.exploration_rate,
+                    'user_profile_summary': result.user_profile_summary,
+                    'next_exploration_suggestions': result.next_exploration_suggestions,
+                    
+                    # 🆕 ENHANCED MODE AND STRATEGY INFORMATION
+                    'algorithm_used': current_strategy,
+                    'strategy_explanation': strategy_explanation,
+                    'clustering_status': clustering_status,
+                    'exploration_status': exploration_status,
+                    
+                    # 🆕 DETAILED SYSTEM STATE
+                    'system_state': {
+                        'current_mode': current_strategy,
+                        'is_clustering': len(preference_clusters) > 0,
+                        'is_exploring': current_strategy in ['exploration', 'hybrid'] or exploration_percentage < 30,
+                        'preference_strength': 'strong' if total_cluster_strength > 0.7 else 'medium' if total_cluster_strength > 0.4 else 'weak',
+                        'recommendation_confidence': 'high' if current_strategy == 'preference_based' else 'medium' if current_strategy == 'hybrid' else 'exploratory',
+                        'feedback_count': feedback_count,
+                        'likes_count': likes_count,
+                        'variant_filtering_active': True
+                    },
+                    
+                    # 🆕 MODE TRANSITION INDICATORS
+                    'mode_indicators': {
+                        'ready_for_clustering': likes_count >= 3 and feedback_count >= 5,
+                        'strong_preferences_detected': total_cluster_strength > 0.6,
+                        'exploration_recommended': exploration_percentage < 15 or likes_count < 2,
+                        'can_use_preferences': len(preference_clusters) > 0 and total_cluster_strength > 0.3
+                    }
+                }
+                
+            except Exception as e:
+                logger.error(f"Error in get_recommendations_async: {e}")
+                logger.error(traceback.format_exc())
+                raise e
+
+        # Run async function
+        result = asyncio.run(get_recommendations_async())
+        return jsonify(result)
         
     except Exception as e:
-        logger.error(f"Error getting recommendations: {e}")
+        logger.error(f"Error in get_recommendations: {e}")
         logger.error(traceback.format_exc())
         return jsonify({
             'status': 'error',
-            'message': f'Failed to get recommendations: {str(e)}',
-            'error_type': 'recommendation_failed'
+            'message': str(e)
         }), 500
 
 @app.route('/api/add-feedback', methods=['POST'])
@@ -516,49 +605,210 @@ def cleanup_session(session_id):
 # Legacy compatibility endpoints (for backward compatibility)
 @app.route('/api/get-series/<int:watch_index>', methods=['GET'])
 def get_series(watch_index):
-    """Get watches from the same series (legacy compatibility)."""
+    """Get all watches from the same series as the specified watch."""
     try:
-        if session_manager is None:
-            return jsonify({'status': 'error', 'message': 'System not initialized'}), 503
+        if not session_manager:
+            return jsonify({
+                'status': 'error',
+                'message': 'Session manager not initialized'
+            }), 500
         
+        # Get watch data directly from the recommendation engine
         watch_data = session_manager.recommendation_engine.watch_data
         
         if watch_index >= len(watch_data):
-            return jsonify({'status': 'error', 'message': 'Invalid watch index'}), 400
+            return jsonify({
+                'status': 'error', 
+                'message': 'Invalid watch index'
+            }), 400
         
         target_watch = watch_data[watch_index]
         series_name = target_watch.get('specs', {}).get('serie', '')
+        brand = target_watch.get('brand', '')
         
-        if not series_name or series_name in ['-', 'All']:
+        if not series_name or series_name in ['-', 'All', '']:
             return jsonify({
                 'status': 'success',
                 'series_watches': [target_watch],
-                'series_name': 'Individual Watch'
+                'series_name': 'Individual Watch',
+                'count': 1
             })
         
-        # Find all watches in the same series
+        # Find all watches in the same series and brand
         series_watches = []
         for i, watch in enumerate(watch_data):
             watch_series = watch.get('specs', {}).get('serie', '')
-            if watch_series.lower() == series_name.lower() and watch_series not in ['-', 'All']:
+            watch_brand = watch.get('brand', '')
+            
+            if (watch_brand.lower() == brand.lower() and 
+                watch_series.lower() == series_name.lower() and 
+                watch_series not in ['-', 'All', '']):
                 watch_copy = watch.copy()
                 watch_copy['index'] = i
                 series_watches.append(watch_copy)
         
-        logger.info(f"🔍 Found {len(series_watches)} watches in series '{series_name}'")
-        
         return jsonify({
             'status': 'success',
             'series_watches': series_watches,
-            'series_name': series_name
+            'series_name': series_name,
+            'count': len(series_watches)
         })
-        
+    
     except Exception as e:
         logger.error(f"Error getting series: {e}")
+        logger.error(traceback.format_exc())
         return jsonify({
             'status': 'error',
             'message': str(e)
         }), 500
+
+@app.route('/api/variant-filtering-stats', methods=['GET'])
+def get_variant_filtering_stats():
+    """Get variant filtering statistics from the modern recommendation engine."""
+    try:
+        if not session_manager:
+            return jsonify({
+                'status': 'error',
+                'message': 'Session manager not initialized'
+            }), 500
+        
+        variant_stats = session_manager.recommendation_engine.get_variant_filtering_stats()
+        
+        return jsonify({
+            'status': 'success',
+            'variant_filtering_stats': variant_stats,
+            'info': 'Modern recommendation engine variant filtering statistics'
+        })
+    
+    except Exception as e:
+        logger.error(f"Error getting variant filtering stats: {e}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/get-variants/<int:watch_index>', methods=['GET', 'OPTIONS'])
+def get_variants(watch_index):
+    """Get all variants of a specific watch (different colors, sizes, etc. of the same model)."""
+    if request.method == 'OPTIONS':
+        # Handle CORS preflight request
+        response = jsonify({})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+        return response
+        
+    try:
+        if not session_manager:
+            return jsonify({
+                'status': 'error',
+                'message': 'Session manager not initialized'
+            }), 500
+        
+        watch_data = session_manager.recommendation_engine.watch_data
+        
+        if watch_index < 0 or watch_index >= len(watch_data):
+            return jsonify({
+                'status': 'error',
+                'message': 'Invalid watch index'
+            }), 400
+        
+        target_watch = watch_data[watch_index]
+        target_brand = target_watch.get('brand', '')
+        target_model = target_watch.get('model', target_watch.get('model_name', ''))
+        
+        # Get the signature for this watch
+        if hasattr(session_manager.recommendation_engine, 'watch_signatures') and watch_index in session_manager.recommendation_engine.watch_signatures:
+            target_signature = session_manager.recommendation_engine.watch_signatures[watch_index]
+            target_brand_norm, target_model_norm = target_signature
+        else:
+            # Fallback to direct string matching
+            target_brand_norm = session_manager.recommendation_engine._normalize_brand_name(target_brand)
+            target_model_norm = session_manager.recommendation_engine._extract_base_model_name(target_model)
+        
+        # Find all watches with the same brand-model signature
+        variants = []
+        for i, watch in enumerate(watch_data):
+            if hasattr(session_manager.recommendation_engine, 'watch_signatures') and i in session_manager.recommendation_engine.watch_signatures:
+                watch_signature = session_manager.recommendation_engine.watch_signatures[i]
+                if watch_signature == target_signature:
+                    watch_copy = watch.copy()
+                    watch_copy['index'] = i
+                    watch_copy['is_target'] = (i == watch_index)
+                    
+                    # Add variant-specific metadata
+                    watch_copy['variant_info'] = {
+                        'brand_normalized': target_brand_norm,
+                        'model_normalized': target_model_norm,
+                        'signature': f"{target_brand_norm} - {target_model_norm}"
+                    }
+                    
+                    # Extract what makes this variant unique (color, size, material, etc.)
+                    variant_identifiers = []
+                    
+                    # Check specs for variant details
+                    specs = watch.get('specs', {})
+                    if specs:
+                        # Case material variants
+                        case_material = specs.get('case_material', '')
+                        if case_material and case_material != '-':
+                            variant_identifiers.append(f"Case: {case_material}")
+                        
+                        # Diameter variants
+                        diameter = specs.get('diameter_mm', '')
+                        if diameter and diameter != '-':
+                            variant_identifiers.append(f"Size: {diameter}mm")
+                        
+                        # Dial color variants
+                        dial_color = specs.get('dial_color', '')
+                        if dial_color and dial_color != '-':
+                            variant_identifiers.append(f"Dial: {dial_color}")
+                        
+                        # Reference/model variants
+                        reference = specs.get('reference', '')
+                        if reference and reference != '-':
+                            variant_identifiers.append(f"Ref: {reference}")
+                    
+                    # Extract variant info from model name differences
+                    model_variants = []
+                    original_model = target_watch.get('model', '')
+                    current_model = watch.get('model', '')
+                    
+                    if original_model != current_model:
+                        model_variants.append(f"Model: {current_model}")
+                    
+                    watch_copy['variant_details'] = variant_identifiers + model_variants
+                    variants.append(watch_copy)
+        
+        # Sort variants: target watch first, then by model name
+        variants.sort(key=lambda w: (not w['is_target'], w.get('model', '')))
+        
+        response = jsonify({
+            'status': 'success',
+            'watch_index': watch_index,
+            'target_watch': target_watch,
+            'brand': target_brand,
+            'model': target_model,
+            'signature': f"{target_brand_norm} - {target_model_norm}",
+            'variant_count': len(variants),
+            'variants': variants,
+            'info': f"Found {len(variants)} variants of {target_brand} {target_model_norm}"
+        })
+        
+        # Add CORS headers to the response
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response
+    
+    except Exception as e:
+        logger.error(f"Error getting variants for watch {watch_index}: {e}")
+        logger.error(traceback.format_exc())
+        error_response = jsonify({
+            'status': 'error',
+            'message': str(e)
+        })
+        error_response.headers.add('Access-Control-Allow-Origin', '*')
+        return error_response, 500
 
 if __name__ == '__main__':
     print("🚀 Starting Modern Watch Recommendation API Server")

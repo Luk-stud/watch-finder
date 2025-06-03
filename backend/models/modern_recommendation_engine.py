@@ -30,6 +30,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 import threading
 from abc import ABC, abstractmethod
+import re
 
 # Advanced ML libraries
 try:
@@ -288,6 +289,9 @@ class ModernRecommendationEngine:
         # Load precomputed smart seeds
         self._load_smart_seeds()
         
+        # 🆕 VARIANT FILTERING SETUP
+        self._initialize_variant_filter()
+        
         logger.info(f"🚀 Modern Recommendation Engine initialized with {self.num_watches} watches")
         logger.info(f"📐 Embedding dimension: {self.dimension}")
         logger.info(f"🔍 Similarity index: {type(self.similarity_index).__name__}")
@@ -337,6 +341,153 @@ class ModernRecommendationEngine:
                 logger.warning(f"Could not load JSON smart seeds: {json_error}")
                 self.smart_seed_sets = []
 
+    def _initialize_variant_filter(self):
+        """Initialize efficient variant filtering using brand/model analysis."""
+        logger.info("🔧 Initializing variant filtering system...")
+        
+        # Build brand-model mapping for fast lookups
+        self.brand_model_map = defaultdict(set)  # brand -> set of base model names
+        self.watch_signatures = {}  # watch_index -> (brand, base_model) tuple
+        
+        # Process all watches to create variant signatures
+        for i, watch in enumerate(self.watch_data):
+            brand = self._normalize_brand_name(watch.get('brand', ''))
+            model = self._extract_base_model_name(watch.get('model', watch.get('model_name', '')))
+            
+            signature = (brand, model)
+            self.watch_signatures[i] = signature
+            self.brand_model_map[brand].add(model)
+        
+        # Calculate variant statistics
+        total_signatures = len(set(self.watch_signatures.values()))
+        total_watches = len(self.watch_data)
+        unique_brands = len(self.brand_model_map)
+        
+        logger.info(f"✅ Variant filtering initialized:")
+        logger.info(f"   📊 {total_watches} watches → {total_signatures} unique signatures")
+        logger.info(f"   🏷️  {unique_brands} unique brands")
+        logger.info(f"   🔄 Variant reduction: {((total_watches - total_signatures) / total_watches * 100):.1f}%")
+
+    def _normalize_brand_name(self, brand: str) -> str:
+        """Normalize brand name for consistent matching."""
+        if not brand:
+            return 'unknown'
+        
+        # Convert to lowercase and remove common variations
+        normalized = brand.lower().strip()
+        
+        # Handle common brand name variations
+        brand_normalizations = {
+            'tag heuer': 'tagheuer',
+            'a. lange & söhne': 'alangesoehne',
+            'a. lange & sohne': 'alangesoehne',
+            'audemars piguet': 'audemarspiguet',
+            'vacheron constantin': 'vacheroncastantin',
+            'patek philippe': 'patekphilippe',
+            'franck muller': 'franckmuller',
+            'frederique constant': 'frederiqueconstant',
+        }
+        
+        return brand_normalizations.get(normalized, normalized)
+
+    def _extract_base_model_name(self, model: str) -> str:
+        """Extract base model name, removing variant indicators."""
+        if not model or model.lower() in ['-', 'n/a', 'unknown', '']:
+            return 'generic'
+        
+        base_name = model.lower().strip()
+        
+        # Remove common variant indicators
+        variant_patterns = [
+            r'\s*\([^)]*\).*$',     # Remove parenthetical info and everything after
+            r'\s*-\s*\d+mm.*$',     # Remove size specifications like "- 42mm"
+            r'\s*\d+mm.*$',         # Remove size specifications like "42mm"
+            r'\s*-\s*steel.*$',     # Remove material specifications
+            r'\s*-\s*gold.*$',      # Remove material specifications
+            r'\s*-\s*titanium.*$',  # Remove material specifications
+            r'\s*-\s*black.*$',     # Remove color specifications
+            r'\s*-\s*white.*$',     # Remove color specifications
+            r'\s*-\s*blue.*$',      # Remove color specifications
+            r'\s*-\s*silver.*$',    # Remove color specifications
+            r'\s*\|.*$',            # Remove pipe and everything after
+            r'\s*with.*$',          # Remove "with..." and after
+            r'\s*featuring.*$',     # Remove "featuring..." and after
+        ]
+        
+        for pattern in variant_patterns:
+            base_name = re.sub(pattern, '', base_name, flags=re.IGNORECASE)
+        
+        # Clean up whitespace and return
+        return base_name.strip() or 'generic'
+
+    def _is_variant_duplicate(self, watch_index: int, recently_shown: List[Dict[str, Any]], 
+                            lookback_count: int = 5) -> bool:
+        """Check if watch is a variant of recently shown watches."""
+        if watch_index not in self.watch_signatures:
+            return False
+        
+        current_signature = self.watch_signatures[watch_index]
+        current_brand, current_model = current_signature
+        
+        # Convert deque to list for slicing and get recent watches
+        recent_list = list(recently_shown)
+        recent_watches = recent_list[-lookback_count:] if recent_list else []
+        
+        for recent_watch in recent_watches:
+            recent_index = recent_watch.get('index')
+            if recent_index is None or recent_index not in self.watch_signatures:
+                continue
+            
+            recent_signature = self.watch_signatures[recent_index]
+            recent_brand, recent_model = recent_signature
+            
+            # Check for exact brand + model match
+            if current_brand == recent_brand and current_model == recent_model:
+                logger.debug(f"🚫 Filtered variant: {current_brand} {current_model} (watch {watch_index}) - already shown {recent_index}")
+                return True
+        
+        return False
+
+    def _filter_variant_duplicates(self, candidate_watches: List[Dict[str, Any]], 
+                                 user_state: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Filter out variant duplicates from candidate watches."""
+        if not candidate_watches:
+            return candidate_watches
+        
+        # Get recent recommendations from user state
+        recent_recommendations = user_state.get('recent_recommendations', [])
+        
+        # Track what we've already added in this batch
+        batch_signatures = set()
+        filtered_watches = []
+        
+        for watch in candidate_watches:
+            watch_index = watch.get('index')
+            if watch_index is None or watch_index not in self.watch_signatures:
+                filtered_watches.append(watch)
+                continue
+            
+            signature = self.watch_signatures[watch_index]
+            
+            # Check against recent recommendations
+            if self._is_variant_duplicate(watch_index, recent_recommendations, lookback_count=8):
+                logger.debug(f"🚫 Filtered recent variant: {signature}")
+                continue
+            
+            # Check against current batch
+            if signature in batch_signatures:
+                logger.debug(f"🚫 Filtered batch variant: {signature}")
+                continue
+            
+            # Add to filtered list and track signature
+            filtered_watches.append(watch)
+            batch_signatures.add(signature)
+        
+        if len(filtered_watches) < len(candidate_watches):
+            logger.info(f"🎯 Variant filtering: {len(candidate_watches)} → {len(filtered_watches)} watches")
+        
+        return filtered_watches
+
     def _ensure_clusters_initialized(self):
         """Lazy initialization of clustering components."""
         if self._clusters_initialized:
@@ -344,18 +495,29 @@ class ModernRecommendationEngine:
             
         logger.info("🧠 Initializing clustering components...")
         
-        # Style-based clustering
-        style_features = self._extract_style_features()
-        self.style_clusters = KMeans(n_clusters=min(20, len(style_features)//10), random_state=42)
-        self.style_clusters.fit(style_features)
-        
-        # Brand-based clustering  
-        brand_features = self._extract_brand_features()
-        self.brand_clusters = KMeans(n_clusters=min(15, len(set(w['brand'] for w in self.watch_data))), random_state=42)
-        self.brand_clusters.fit(brand_features)
-        
-        self._clusters_initialized = True
-        logger.info("✅ Clustering components initialized")
+        try:
+            # Style-based clustering
+            style_features = self._extract_style_features()
+            n_style_clusters = min(20, max(2, len(style_features)//10))
+            self.style_clusters = KMeans(n_clusters=n_style_clusters, random_state=42, n_init=10)
+            self.style_clusters.fit(style_features)
+            
+            # Brand-based clustering  
+            brand_features = self._extract_brand_features()
+            unique_brands = len(set(w['brand'] for w in self.watch_data))
+            n_brand_clusters = min(15, max(2, unique_brands))
+            self.brand_clusters = KMeans(n_clusters=n_brand_clusters, random_state=42, n_init=10)
+            self.brand_clusters.fit(brand_features)
+            
+            self._clusters_initialized = True
+            logger.info("✅ Clustering components initialized")
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Clustering initialization failed, using fallback: {e}")
+            # Fallback: simple clustering
+            self.style_clusters = None
+            self.brand_clusters = None
+            self._clusters_initialized = True
 
     def _extract_style_features(self) -> np.ndarray:
         """Extract style-based features for clustering."""
@@ -496,6 +658,7 @@ class ModernRecommendationEngine:
                 'seen_watches': set(),
                 'seen_series': set(),
                 'feedback_history': deque(maxlen=100),
+                'recent_recommendations': deque(maxlen=30),  # Track recent recommendations for variant filtering
                 'session_start': datetime.now(),
                 'engagement_level': 'exploring',
                 'dominant_preferences': [],
@@ -638,29 +801,29 @@ class ModernRecommendationEngine:
             logger.info(f"🌱 Selected: cold_start (insufficient feedback)")
             return 'cold_start'
         
-        # Strong preferences established - be more aggressive
-        if likes_count >= 5 and len(preference_clusters) > 0 and total_cluster_strength > 0.5:
+        # Strong preferences established - focus on preferences
+        if likes_count >= 5 and len(preference_clusters) >= 2 and total_cluster_strength > 0.6:
             logger.info(f"🎯 Selected: preference_based ({likes_count} likes, {len(preference_clusters)} strong clusters)")
             return 'preference_based'
         
-        # Medium-strong preferences - still prefer preference_based over hybrid  
-        if likes_count >= 8 and len(preference_clusters) > 0:
+        # Medium preferences - still prefer preference_based over hybrid  
+        if likes_count >= 3 and len(preference_clusters) >= 1 and total_cluster_strength > 0.4:
             logger.info(f"🎯 Selected: preference_based ({likes_count} likes, sufficient data)")
             return 'preference_based'
         
-        # Medium preferences - use hybrid approach (reduced threshold)
-        if likes_count >= 4 and feedback_count >= 8:
+        # Good feedback but weak clusters - use hybrid for balance
+        if likes_count >= 2 and feedback_count >= 5:
             logger.info(f"🔀 Selected: hybrid ({likes_count} likes, {feedback_count} feedback)")
             return 'hybrid'
         
-        # Force exploration only if really low engagement OR very little explored
-        if (likes_count < 2 and feedback_count >= 15) or exploration_rate < 0.02:
-            logger.info(f"🗺️  Selected: exploration (low engagement or unexplored)")
-            return 'exploration'
+        # Very low engagement but some feedback - hybrid with more exploration
+        if feedback_count >= 3:
+            logger.info(f"🔀 Selected: hybrid (low engagement, some feedback)")
+            return 'hybrid'
         
-        # Default to hybrid for balanced approach
-        logger.info(f"🔀 Selected: hybrid (default)")
-        return 'hybrid'
+        # Last resort - pure exploration (rare)
+        logger.info(f"🗺️  Selected: exploration (fallback)")
+        return 'exploration'
 
     async def _cold_start_recommendations(self, request: RecommendationRequest) -> List[Dict[str, Any]]:
         """Generate cold start recommendations using smart seeds."""
@@ -684,38 +847,65 @@ class ModernRecommendationEngine:
             return recommendations
         
         # Fallback: diverse clustering-based selection
-        self._ensure_clusters_initialized()
+        if self.style_clusters is not None:
+            try:
+                self._ensure_clusters_initialized()
+                
+                # Get representatives from different style clusters
+                cluster_labels = self.style_clusters.labels_
+                unique_clusters = np.unique(cluster_labels)
+                
+                recommendations = []
+                for cluster_id in unique_clusters[:request.num_recommendations]:
+                    cluster_indices = np.where(cluster_labels == cluster_id)[0]
+                    # Select the watch closest to cluster center
+                    cluster_center = self.style_clusters.cluster_centers_[cluster_id]
+                    
+                    best_idx = None
+                    best_distance = float('inf')
+                    
+                    for idx in cluster_indices:
+                        if idx not in request.current_candidates:
+                            style_features = self._extract_style_features()
+                            distance = np.linalg.norm(style_features[idx] - cluster_center)
+                            if distance < best_distance:
+                                best_distance = distance
+                                best_idx = idx
+                    
+                    if best_idx is not None:
+                        watch = self.watch_data[best_idx].copy()
+                        watch['index'] = int(best_idx)
+                        watch['score'] = float(1.0 - (best_distance / 10.0))
+                        watch['confidence'] = 0.7
+                        watch['algorithm'] = 'clustering_cold_start'
+                        watch = convert_to_json_serializable(watch)
+                        recommendations.append(watch)
+                
+                return recommendations
+                
+            except Exception as e:
+                logger.warning(f"Clustering-based cold start failed: {e}")
         
-        # Get representatives from different style clusters
-        cluster_labels = self.style_clusters.labels_
-        unique_clusters = np.unique(cluster_labels)
+        # Ultimate fallback: simple diverse selection
+        import random
+        available_indices = [i for i in range(len(self.watch_data)) 
+                           if i not in request.current_candidates]
+        
+        if not available_indices:
+            available_indices = list(range(len(self.watch_data)))
+            
+        selected_indices = random.sample(available_indices, 
+                                       min(request.num_recommendations, len(available_indices)))
         
         recommendations = []
-        for cluster_id in unique_clusters[:request.num_recommendations]:
-            cluster_indices = np.where(cluster_labels == cluster_id)[0]
-            # Select the watch closest to cluster center
-            cluster_center = self.style_clusters.cluster_centers_[cluster_id]
-            
-            best_idx = None
-            best_distance = float('inf')
-            
-            for idx in cluster_indices:
-                if idx not in request.current_candidates:
-                    style_features = self._extract_style_features()
-                    distance = np.linalg.norm(style_features[idx] - cluster_center)
-                    if distance < best_distance:
-                        best_distance = distance
-                        best_idx = idx
-            
-            if best_idx is not None:
-                watch = self.watch_data[best_idx].copy()
-                watch['index'] = int(best_idx)  # Convert to Python int
-                watch['score'] = float(1.0 - (best_distance / 10.0))  # Convert to Python float
-                watch['confidence'] = 0.7
-                watch['algorithm'] = 'clustering_cold_start'
-                # Convert entire watch to JSON-serializable format
-                watch = convert_to_json_serializable(watch)
-                recommendations.append(watch)
+        for idx in selected_indices:
+            watch = self.watch_data[idx].copy()
+            watch['index'] = int(idx)
+            watch['score'] = 0.8
+            watch['confidence'] = 0.6
+            watch['algorithm'] = 'random_cold_start'
+            watch = convert_to_json_serializable(watch)
+            recommendations.append(watch)
         
         return recommendations
 
@@ -793,8 +983,11 @@ class ModernRecommendationEngine:
 
     async def _exploration_recommendations(self, user_state: Dict[str, Any], request: RecommendationRequest) -> List[Dict[str, Any]]:
         """Generate exploration recommendations to discover new preferences."""
-        self._ensure_clusters_initialized()
-        
+        # Check if clustering is available
+        if not self._clusters_initialized or self.style_clusters is None:
+            # Fallback to simple random diverse selection
+            return await self._diverse_random_recommendations(user_state, request)
+            
         seen_watches = user_state['seen_watches']
         explored_areas = user_state['exploration_areas']
         
@@ -818,24 +1011,68 @@ class ModernRecommendationEngine:
                                if idx not in seen_watches and idx not in request.current_candidates]
             
             if available_indices:
-                # Select the most representative watch (closest to cluster center)
-                cluster_center = self.style_clusters.cluster_centers_[cluster_id]
-                style_features = self._extract_style_features()
-                
-                best_idx = min(available_indices, 
-                             key=lambda idx: np.linalg.norm(style_features[idx] - cluster_center))
-                
-                watch = self.watch_data[best_idx].copy()
-                watch['index'] = int(best_idx)  # Convert to Python int
-                watch['score'] = 0.8  # High score for exploration
-                watch['confidence'] = 0.6  # Medium confidence for exploration
-                watch['algorithm'] = 'exploration'
-                watch['cluster_id'] = int(cluster_id)  # Convert to Python int
-                
-                # Convert entire watch to JSON-serializable format
-                watch = convert_to_json_serializable(watch)
-                recommendations.append(watch)
-                user_state['exploration_areas'].add(cluster_id)
+                try:
+                    # Select the most representative watch (closest to cluster center)
+                    cluster_center = self.style_clusters.cluster_centers_[cluster_id]
+                    style_features = self._extract_style_features()
+                    
+                    best_idx = min(available_indices, 
+                                 key=lambda idx: np.linalg.norm(style_features[idx] - cluster_center))
+                    
+                    watch = self.watch_data[best_idx].copy()
+                    watch['index'] = int(best_idx)
+                    watch['score'] = 0.8
+                    watch['confidence'] = 0.6
+                    watch['algorithm'] = 'exploration'
+                    watch['cluster_id'] = int(cluster_id)
+                    
+                    watch = convert_to_json_serializable(watch)
+                    recommendations.append(watch)
+                    user_state['exploration_areas'].add(cluster_id)
+                    
+                except Exception as e:
+                    logger.warning(f"Error processing cluster {cluster_id}: {e}")
+                    continue
+        
+        # If we don't have enough recommendations, add random diverse ones
+        if len(recommendations) < request.num_recommendations:
+            remaining = request.num_recommendations - len(recommendations)
+            additional_recs = await self._diverse_random_recommendations(user_state, 
+                RecommendationRequest(
+                    user_id=request.user_id,
+                    liked_indices=request.liked_indices,
+                    disliked_indices=request.disliked_indices,
+                    current_candidates=request.current_candidates + [r['index'] for r in recommendations],
+                    num_recommendations=remaining
+                ))
+            recommendations.extend(additional_recs)
+        
+        return recommendations
+    
+    async def _diverse_random_recommendations(self, user_state: Dict[str, Any], request: RecommendationRequest) -> List[Dict[str, Any]]:
+        """Fallback method for diverse random recommendations."""
+        seen_watches = user_state['seen_watches']
+        available_indices = [i for i in range(len(self.watch_data)) 
+                           if i not in seen_watches and i not in request.current_candidates]
+        
+        if not available_indices:
+            # If we've seen everything, reset and use all watches
+            available_indices = list(range(len(self.watch_data)))
+        
+        # Select random diverse watches
+        import random
+        selected_indices = random.sample(available_indices, min(request.num_recommendations, len(available_indices)))
+        
+        recommendations = []
+        for idx in selected_indices:
+            watch = self.watch_data[idx].copy()
+            watch['index'] = int(idx)
+            watch['score'] = 0.7
+            watch['confidence'] = 0.5
+            watch['algorithm'] = 'diverse_random'
+            
+            watch = convert_to_json_serializable(watch)
+            recommendations.append(watch)
         
         return recommendations
 
@@ -899,6 +1136,9 @@ class ModernRecommendationEngine:
         if not recommendations:
             return recommendations
         
+        # 🆕 APPLY VARIANT FILTERING FIRST
+        recommendations = self._filter_variant_duplicates(recommendations, user_state)
+        
         # Remove duplicates
         seen_indices = set()
         unique_recommendations = []
@@ -917,6 +1157,18 @@ class ModernRecommendationEngine:
             rec['user_engagement_level'] = user_state['engagement_level']
             # Convert entire recommendation to JSON-serializable format
             rec = convert_to_json_serializable(rec)
+        
+        # 🆕 UPDATE RECENT RECOMMENDATIONS TRACKING
+        recent_recommendations = user_state.get('recent_recommendations', deque(maxlen=30))
+        for rec in unique_recommendations:
+            recent_recommendations.append({
+                'index': rec['index'],
+                'brand': rec.get('brand', ''),
+                'model': rec.get('model', rec.get('model_name', '')),
+                'timestamp': datetime.now().isoformat(),
+                'signature': self.watch_signatures.get(rec['index'], ('unknown', 'unknown'))
+            })
+        user_state['recent_recommendations'] = recent_recommendations
             
         # Apply final conversion to entire list
         return [convert_to_json_serializable(rec) for rec in unique_recommendations]
@@ -1223,4 +1475,37 @@ class ModernRecommendationEngine:
 
     def get_performance_summary(self) -> Dict[str, Any]:
         """Get performance summary (compatibility method)."""
-        return self.performance_metrics.copy() 
+        return self.performance_metrics.copy()
+
+    def get_variant_filtering_stats(self) -> Dict[str, Any]:
+        """Get variant filtering statistics for monitoring."""
+        if not hasattr(self, 'watch_signatures'):
+            return {'error': 'Variant filtering not initialized'}
+        
+        total_watches = len(self.watch_data)
+        unique_signatures = len(set(self.watch_signatures.values()))
+        unique_brands = len(self.brand_model_map)
+        
+        # Calculate brand distribution
+        brand_counts = defaultdict(int)
+        model_counts = defaultdict(int)
+        
+        for brand, model in self.watch_signatures.values():
+            brand_counts[brand] += 1
+            model_counts[f"{brand}_{model}"] += 1
+        
+        # Find most common variants
+        most_common_variants = sorted(model_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+        
+        return {
+            'total_watches': total_watches,
+            'unique_signatures': unique_signatures,
+            'unique_brands': unique_brands,
+            'variant_reduction_percentage': ((total_watches - unique_signatures) / total_watches * 100),
+            'avg_variants_per_signature': total_watches / unique_signatures if unique_signatures > 0 else 0,
+            'most_common_variants': [
+                {'signature': sig.replace('_', ' - '), 'count': count} 
+                for sig, count in most_common_variants
+            ],
+            'brand_distribution': dict(sorted(brand_counts.items(), key=lambda x: x[1], reverse=True)[:15])
+        } 

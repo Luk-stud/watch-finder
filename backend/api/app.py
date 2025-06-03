@@ -375,10 +375,10 @@ def get_recommendations():
                 'performance_summary': performance_summary,
                 'preference_modes': preference_modes,
                 'exploration_stats': final_exploration_stats,
-                'feedback_processed': {
-                    'likes': len(liked_indices),
-                    'dislikes': len(disliked_indices),
-                    'total_feedback_history': len(beam_search_engine.feedback_history)
+            'feedback_processed': {
+                'likes': len(liked_indices),
+                'dislikes': len(disliked_indices),
+                'total_feedback_history': len(beam_search_engine.feedback_history)
                 }
             },
             'system_info': {
@@ -504,7 +504,7 @@ def get_preference_modes():
                 'user_engagement_level': beam_search_engine.user_profile['engagement_level']
             }
         })
-        
+    
     except ValueError as ve:
         return jsonify({
             'status': 'error',
@@ -599,6 +599,41 @@ def get_variant_stats():
         return jsonify({
             'status': 'success',
             'variant_stats': variant_stats
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/modern-variant-stats', methods=['GET'])
+def get_modern_variant_stats():
+    """Get variant filtering statistics from the modern recommendation engine."""
+    try:
+        if not session_manager:
+            return jsonify({
+                'status': 'error',
+                'message': 'Session manager not initialized'
+            }), 500
+        
+        # Get modern engine instance (if available)
+        if hasattr(session_manager, 'modern_engine'):
+            variant_stats = session_manager.modern_engine.get_variant_filtering_stats()
+        else:
+            # Create temporary modern engine to get stats
+            from models.modern_recommendation_engine import ModernRecommendationEngine
+            temp_modern_engine = ModernRecommendationEngine(
+                embeddings=session_manager.base_embeddings,
+                watch_data=session_manager.base_watch_data,
+                embeddings_pre_normalized=True
+            )
+            variant_stats = temp_modern_engine.get_variant_filtering_stats()
+        
+        return jsonify({
+            'status': 'success',
+            'variant_filtering_stats': variant_stats,
+            'info': 'Modern recommendation engine variant filtering statistics'
         })
     
     except Exception as e:
@@ -726,7 +761,7 @@ def get_exploration_stats():
             'session_id': session_id,
             'exploration_stats': exploration_stats
         })
-        
+    
     except ValueError as ve:
         return jsonify({
             'status': 'error',

@@ -1,19 +1,19 @@
 import React, { useState, useRef } from 'react';
 import { Watch, getWatchImageUrl, formatPrice, getWatchPrice } from '../data/watchData';
-import { Heart, X, Info, Layers, Cpu } from 'lucide-react';
+import { Heart, X, Info, Copy } from 'lucide-react';
 
 interface WatchCardProps {
   watch: Watch;
   onSwipe: (direction: 'left' | 'right') => void;
   onSpecsClick: (watch: Watch) => void;
-  onSeriesClick: (watch: Watch) => void;
+  onVariantsClick: (watch: Watch) => void;
 }
 
 const WatchCard: React.FC<WatchCardProps> = ({
   watch,
   onSwipe,
   onSpecsClick,
-  onSeriesClick,
+  onVariantsClick,
 }) => {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -124,8 +124,6 @@ const WatchCard: React.FC<WatchCardProps> = ({
   // Extract key info from our modern backend data
   const price = getWatchPrice(watch);
   const displayPrice = formatPrice(price);
-  const series = watch.specs?.serie || watch.brand;
-  const hasValidSeries = series && series !== '-' && series !== 'All';
   const diameter = watch.specs?.diameter_mm ? `${watch.specs.diameter_mm}mm` : '';
   const movement = watch.specs?.movement || watch.movement || '';
 
@@ -232,63 +230,38 @@ const WatchCard: React.FC<WatchCardProps> = ({
                 onSpecsClick(watch);
               }}
               className="w-10 h-10 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/70 transition-colors"
+              title="Watch Specifications"
             >
               <Info className="w-5 h-5" />
             </button>
-            {hasValidSeries && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSeriesClick(watch);
-                }}
-                className="w-10 h-10 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/70 transition-colors"
-              >
-                <Layers className="w-5 h-5" />
-              </button>
-            )}
-          </div>
-
-          {/* Watch specifications overlay */}
-          <div className="absolute bottom-4 left-4 right-4">
-            <div className="flex flex-wrap gap-2">
-              {diameter && (
-                <span className="bg-black/50 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-full">
-                  {diameter}
-                </span>
-              )}
-              {watch.specs?.case_material && watch.specs.case_material !== '-' && (
-                <span className="bg-black/50 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-full">
-                  {watch.specs.case_material}
-                </span>
-              )}
-              {watch.specs?.waterproofing_meters && watch.specs.waterproofing_meters !== '-' && (
-                <span className="bg-black/50 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-full">
-                  {watch.specs.waterproofing_meters}m WR
-                </span>
-              )}
-            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onVariantsClick(watch);
+              }}
+              className="w-10 h-10 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/70 transition-colors"
+              title="Watch Variants"
+            >
+              <Copy className="w-5 h-5" />
+            </button>
           </div>
         </div>
 
         {/* Watch Info */}
-        <div className="p-4 md:p-6 flex-shrink-0 flex flex-col justify-between min-h-[40%] max-h-[40%] overflow-hidden">
-          <div className="flex-1 min-h-0">
-            <h2 className="text-xl md:text-2xl font-bold text-white mb-1 truncate">{watch.model}</h2>
-            <p className="text-yellow-400 font-semibold mb-1 truncate">{watch.brand}</p>
-            {hasValidSeries && (
-              <p className="text-gray-400 text-sm mb-2 truncate">{series} Series</p>
-            )}
-            {movement && movement !== '-' && (
-              <p className="text-gray-400 text-xs truncate mb-2">{movement}</p>
-            )}
+        <div className="p-6 flex flex-col gap-2">
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-white font-bold text-xl">{watch.brand}</h3>
+              <p className="text-gray-400 text-sm">{watch.model}</p>
+            </div>
+            <div className="text-right">
+              <div className="text-green-400 font-bold">{displayPrice}</div>
+              {diameter && <div className="text-gray-500 text-sm">{diameter}</div>}
+            </div>
           </div>
-          
-          <div className="flex justify-between items-end mt-auto">
-            <span className="text-xl md:text-2xl font-bold text-white truncate">{displayPrice}</span>
-            {watch.specs?.launch_date && (
-              <span className="text-gray-400 text-sm flex-shrink-0 ml-2">{watch.specs.launch_date}</span>
-            )}
-          </div>
+          {movement && (
+            <div className="text-gray-500 text-sm truncate">{movement}</div>
+          )}
         </div>
       </div>
     </div>

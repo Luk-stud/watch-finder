@@ -17,13 +17,13 @@ const LikedWatches = () => {
       <div className="p-6 border-b border-gray-800 flex-shrink-0">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link
-              to="/swipe"
+        <Link
+          to="/swipe"
               className="w-10 h-10 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center text-white transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <div>
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </Link>
+        <div>
               <h1 className="text-3xl font-bold text-white">Your Liked Watches</h1>
               <p className="text-gray-400">
                 {likedWatches.length} watch{likedWatches.length !== 1 ? 'es' : ''} selected
@@ -40,21 +40,21 @@ const LikedWatches = () => {
       {/* Content */}
       <div className="flex-1 p-6 overflow-auto min-h-0">
         <div className="max-w-6xl mx-auto">
-          {likedWatches.length === 0 ? (
+        {likedWatches.length === 0 ? (
             <div className="text-center py-20">
               <Heart className="w-24 h-24 mx-auto mb-6 text-gray-600" />
               <h2 className="text-2xl font-bold text-white mb-4">No Liked Watches Yet</h2>
               <p className="text-gray-400 mb-8">
                 Start swiping to discover watches you love!
               </p>
-              <Link
-                to="/swipe"
+            <Link
+              to="/swipe"
                 className="bg-gradient-to-r from-yellow-400 to-yellow-600 text-black px-8 py-3 rounded-full font-semibold hover:scale-105 transition-transform"
-              >
+            >
                 Start Discovering
-              </Link>
-            </div>
-          ) : (
+            </Link>
+          </div>
+        ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {likedWatches.map((watch, index) => (
                 <LikedWatchCard key={watch.index || index} watch={watch} />
@@ -62,8 +62,8 @@ const LikedWatches = () => {
             </div>
           )}
         </div>
-      </div>
-    </div>
+                    </div>
+                  </div>
   );
 };
 
@@ -102,8 +102,8 @@ const LikedWatchCard: React.FC<LikedWatchCardProps> = ({ watch }) => {
           <div className="text-center">
             <div className="text-black font-bold text-lg">{watch.brand}</div>
             <div className="text-black text-sm">{watch.model}</div>
-          </div>
-        </div>
+                  </div>
+                </div>
 
         {/* AI Badge */}
         {watch.algorithm && (
@@ -114,7 +114,7 @@ const LikedWatchCard: React.FC<LikedWatchCardProps> = ({ watch }) => {
                 {watch.confidence.toFixed(1)}
               </span>
             )}
-          </div>
+                </div>
         )}
 
         {/* Seed Badge */}
