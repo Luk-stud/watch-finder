@@ -3,7 +3,7 @@
   buildCommand = "pip install -r requirements.txt"
 
 [deploy]
-  startCommand = "cd watch_finder_v2/backend/api && python app.py"
+  startCommand = "cd watch_finder_v2/backend/api && python simple_app.py"
   healthcheckPath = "/api/health"
   healthcheckTimeout = 300
   restartPolicyType = "ON_FAILURE"
