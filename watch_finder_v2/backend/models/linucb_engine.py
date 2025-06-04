@@ -237,9 +237,13 @@ class DynamicMultiExpertLinUCBEngine:
         self.session_experts: Dict[str, List[int]] = {}  # session_id -> [expert_ids] 
         self.session_interaction_counts: Dict[str, int] = {}  # session_id -> interaction count
         
+        # MISSING ATTRIBUTES - FIX CRITICAL BUG
+        self.global_liked_watches: List[int] = []  # Global tracking of all liked watches
+        self.experts_created_from_likes: int = 0   # Counter for experts created from likes
+        
         # Watch data
         self.watch_data: Dict[int, Dict[str, Any]] = {}
-        self.watch_embeddings: Dict[int, np.ndarray] = {}  # watch_id -> raw embedding
+        self.watch_embeddings: Dict[int, np.ndarray] = {}  # watch_id -> reduced embedding (dim size)
         
         # Load data and initialize
         self.data_dir = data_dir or os.path.join(
@@ -301,13 +305,15 @@ class DynamicMultiExpertLinUCBEngine:
                     
                     self.watch_data[watch_id] = enhanced_watch
                     
-                    # Store text embedding
+                    # Store text embedding with proper dimension reduction
                     if 'text_embedding' in watch_dict and isinstance(watch_dict['text_embedding'], np.ndarray):
-                        self.watch_embeddings[watch_id] = watch_dict['text_embedding']
+                        raw_embedding = watch_dict['text_embedding']
+                        self.watch_embeddings[watch_id] = self._reduce_features(raw_embedding)
                     elif watch_id < len(text_embeddings_array):
-                        self.watch_embeddings[watch_id] = text_embeddings_array[watch_id]
+                        raw_embedding = text_embeddings_array[watch_id]
+                        self.watch_embeddings[watch_id] = self._reduce_features(raw_embedding)
                     
-                    # Store CLIP embedding separately
+                    # Store CLIP embedding separately (keep original size for weighted combination)
                     if watch_id < len(clip_embeddings_array):
                         if not hasattr(self, 'watch_clip_embeddings'):
                             self.watch_clip_embeddings = {}
@@ -563,7 +569,10 @@ class DynamicMultiExpertLinUCBEngine:
         clip_weight = context[0] if len(context) > 0 else 0.5
         text_weight = context[1] if len(context) > 1 else 0.5
         
-        # Normalize weights
+        # Validate and normalize weights
+        clip_weight = max(0.0, min(1.0, clip_weight))  # Bound between 0 and 1
+        text_weight = max(0.0, min(1.0, text_weight))  # Bound between 0 and 1
+        
         total_weight = clip_weight + text_weight
         if total_weight > 0:
             clip_weight = clip_weight / total_weight
@@ -703,59 +712,50 @@ class DynamicMultiExpertLinUCBEngine:
     def _create_weighted_embedding(self, text_embedding: np.ndarray, clip_embedding: Optional[np.ndarray], 
                                  text_weight: float, clip_weight: float) -> np.ndarray:
         """Create a weighted combination of text and CLIP embeddings."""
+        # Ensure text embedding is reduced to target dimension
+        if len(text_embedding) != self.dim:
+            text_reduced = self._reduce_features(text_embedding)
+        else:
+            text_reduced = text_embedding
+        
         if clip_embedding is None:
-            # If no CLIP embedding, use text embedding only
-            return text_embedding
+            # If no CLIP embedding, return reduced text embedding
+            return text_reduced / (np.linalg.norm(text_reduced) + 1e-8)
         
         # Handle pure visual mode (clip_weight=1.0, text_weight=0.0)
         if text_weight == 0.0 and clip_weight > 0.0:
-            # Use CLIP embedding directly, resized to match expected dimensions
-            if len(clip_embedding) != len(text_embedding):
-                # Use PCA or simple projection to match dimensions
-                if len(clip_embedding) > len(text_embedding):
-                    # Truncate CLIP embedding
-                    clip_resized = clip_embedding[:len(text_embedding)]
-                else:
-                    # Pad CLIP embedding
-                    clip_resized = np.pad(clip_embedding, (0, len(text_embedding) - len(clip_embedding)))
-            else:
-                clip_resized = clip_embedding
-            
-            # Normalize and return
-            return clip_resized / (np.linalg.norm(clip_resized) + 1e-8)
+            # Reduce CLIP embedding to target dimension
+            clip_reduced = self._reduce_clip_embedding(clip_embedding)
+            return clip_reduced / (np.linalg.norm(clip_reduced) + 1e-8)
         
         # Handle pure text mode (text_weight=1.0, clip_weight=0.0)
         if clip_weight == 0.0 and text_weight > 0.0:
-            return text_embedding / (np.linalg.norm(text_embedding) + 1e-8)
+            return text_reduced / (np.linalg.norm(text_reduced) + 1e-8)
         
         # Handle mixed mode - create weighted combination
-        target_dim = len(text_embedding)
+        text_norm = text_reduced / (np.linalg.norm(text_reduced) + 1e-8)
         
-        # Normalize text embedding
-        text_norm = text_embedding / (np.linalg.norm(text_embedding) + 1e-8)
-        
-        # Resize and normalize CLIP embedding to match text embedding dimension
-        if len(clip_embedding) != target_dim:
-            # Better dimensional matching using interpolation
-            if len(clip_embedding) > target_dim:
-                # Use every nth element for better representation
-                indices = np.linspace(0, len(clip_embedding) - 1, target_dim).astype(int)
-                clip_resized = clip_embedding[indices]
-            else:
-                # Intelligent padding using mirroring
-                clip_resized = np.pad(clip_embedding, (0, target_dim - len(clip_embedding)), mode='wrap')
-        else:
-            clip_resized = clip_embedding
-        
-        clip_norm = clip_resized / (np.linalg.norm(clip_resized) + 1e-8)
+        # Reduce CLIP embedding to target dimension
+        clip_reduced = self._reduce_clip_embedding(clip_embedding)
+        clip_norm = clip_reduced / (np.linalg.norm(clip_reduced) + 1e-8)
         
         # Create weighted combination
         weighted_embedding = text_weight * text_norm + clip_weight * clip_norm
         
         # Renormalize the result
-        weighted_norm = weighted_embedding / (np.linalg.norm(weighted_embedding) + 1e-8)
-        
-        return weighted_norm
+        return weighted_embedding / (np.linalg.norm(weighted_embedding) + 1e-8)
+    
+    def _reduce_clip_embedding(self, clip_embedding: np.ndarray) -> np.ndarray:
+        """Reduce CLIP embedding to target dimension."""
+        if len(clip_embedding) == self.dim:
+            return clip_embedding
+        elif len(clip_embedding) > self.dim:
+            # Use every nth element for better representation
+            indices = np.linspace(0, len(clip_embedding) - 1, self.dim).astype(int)
+            return clip_embedding[indices]
+        else:
+            # Pad with zeros or wrap
+            return np.pad(clip_embedding, (0, self.dim - len(clip_embedding)), mode='constant')
     
     def _apply_diversity_filter(self, candidate_recommendations: List[Tuple[int, float]], 
                                used_brands: Set[str], max_count: int) -> List[Tuple[int, float]]:
@@ -975,12 +975,21 @@ class DynamicMultiExpertLinUCBEngine:
         else:
             # Initialize PCA if not done yet
             if not hasattr(self, '_pca_reducer'):
-                # Load all embeddings for PCA fitting
-                all_embeddings = np.array(list(self.watch_embeddings.values()))
+                # Load all valid (non-empty) embeddings for PCA fitting
+                valid_embeddings = []
+                for emb in self.watch_embeddings.values():
+                    if emb is not None and len(emb) > 0:
+                        valid_embeddings.append(emb)
+                
+                if len(valid_embeddings) == 0:
+                    logger.warning("No valid embeddings for PCA, using truncation")
+                    return embedding[:self.dim] if len(embedding) >= self.dim else np.pad(embedding, (0, self.dim - len(embedding)))
+                
+                embeddings_matrix = np.array(valid_embeddings)
                 
                 # Standardize and fit PCA
                 self._scaler = StandardScaler()
-                embeddings_scaled = self._scaler.fit_transform(all_embeddings)
+                embeddings_scaled = self._scaler.fit_transform(embeddings_matrix)
                 
                 self._pca_reducer = PCA(n_components=self.dim)
                 self._pca_reducer.fit(embeddings_scaled)
@@ -988,11 +997,14 @@ class DynamicMultiExpertLinUCBEngine:
                 logger.info(f"PCA reducer initialized: {self.dim}D retains "
                           f"{np.sum(self._pca_reducer.explained_variance_ratio_)*100:.1f}% variance")
             
-            # Apply standardization and PCA reduction
-            embedding_scaled = self._scaler.transform(embedding.reshape(1, -1))
-            reduced = self._pca_reducer.transform(embedding_scaled)
-            
-            return reduced.flatten()
+            try:
+                # Apply standardization and PCA reduction
+                embedding_scaled = self._scaler.transform(embedding.reshape(1, -1))
+                reduced = self._pca_reducer.transform(embedding_scaled)
+                return reduced.flatten()
+            except Exception as e:
+                logger.warning(f"PCA reduction failed: {e}, using truncation")
+                return embedding[:self.dim] if len(embedding) >= self.dim else np.pad(embedding, (0, self.dim - len(embedding)))
     
     def _create_fallback_data(self) -> None:
         """Create minimal fallback data if loading fails."""
@@ -1145,8 +1157,6 @@ class DynamicMultiExpertLinUCBEngine:
                 self.unassigned_watches.discard(watch_id)
                 assigned_similar += 1
         
-        self.experts_created_from_likes += 1
-        
         # Calculate metrics for logging
         total_expert_watches = len(self.experts[expert_id].liked_watches)
         remaining_unassigned = len(self.unassigned_watches)
@@ -1158,56 +1168,6 @@ class DynamicMultiExpertLinUCBEngine:
         
         return expert_id
     
-    def _check_and_create_experts_from_likes(self, session_id: str) -> bool:
-        """Check if we have enough likes to create experts and do so if needed."""
-        total_likes = len(self.global_liked_watches)
-        
-        # Check if we should create first expert
-        if len(self.experts) == 0 and total_likes >= self.min_likes_for_first_expert:
-            logger.info(f"🎯 Creating first expert from {total_likes} likes!")
-            
-            # Cluster the likes
-            clusters = self._cluster_liked_watches(self.global_liked_watches)
-            
-            # Create expert from largest cluster
-            self._create_expert_from_likes(clusters[0], 0)
-            
-            # If there are additional significant clusters, create experts for them too
-            for i, cluster in enumerate(clusters[1:], 1):
-                if len(cluster) >= self.min_likes_for_new_expert and len(self.experts) < self.max_experts:
-                    self._create_expert_from_likes(cluster, i)
-            
-            # Exit pure exploration mode
-            self.pure_exploration_mode = False
-            logger.info("🚀 EXITING PURE EXPLORATION MODE - Preference-based recommendations active!")
-            
-            return True
-        
-        # Check if we should create additional experts from recent likes
-        elif len(self.experts) > 0 and len(self.experts) < self.max_experts:
-            session_likes = self.session_liked_watches.get(session_id, [])
-            if len(session_likes) >= self.min_likes_for_new_expert:
-                # Check if these likes form a distinct cluster
-                recent_embeddings = [self.watch_embeddings[w] for w in session_likes 
-                                   if w in self.watch_embeddings]
-                
-                if recent_embeddings:
-                    # Check similarity to existing experts
-                    is_distinct = True
-                    for expert_id, centroid in self.expert_centroids.items():
-                        avg_embedding = np.mean(recent_embeddings, axis=0)
-                        similarity = self._cosine_similarity(avg_embedding, centroid)
-                        if similarity >= self.like_clustering_threshold:
-                            is_distinct = False
-                            break
-                    
-                    if is_distinct:
-                        logger.info(f"🎯 Creating new preference expert from {len(session_likes)} recent likes!")
-                        self._create_expert_from_likes(session_likes, len(self.experts))
-                        return True
-        
-        return False
-
     def _format_recommendation(self, watch_id: int, confidence: float, recommendation_type: str) -> Dict[str, Any]:
         """Format a recommendation as a dictionary."""
         if watch_id in self.watch_data:
