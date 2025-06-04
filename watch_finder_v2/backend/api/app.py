@@ -15,12 +15,16 @@ import uuid
 from datetime import datetime
 import pickle
 import numpy as np
+from typing import Dict, Any, List
 
 # Add the models directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'models'))
 
 # Import the engine
 from linucb_engine import DynamicMultiExpertLinUCBEngine
+from models.optimized_linucb_engine import OptimizedLinUCBEngine
+from utils.json_utils import convert_numpy_to_python
+from utils.filter_utils import should_include_watch, adjust_watch_score
 
 # Set up logging
 logging.basicConfig(
@@ -64,26 +68,21 @@ else:
 # Global engine instance
 engine = None
 
-def initialize_engine():
-    """Initialize the recommendation engine."""
+@app.before_first_request
+def initialize():
     global engine
     try:
-        data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
-        logger.info(f"Initializing engine with data directory: {data_dir}")
-        
-        engine = DynamicMultiExpertLinUCBEngine(
-            dim=100,  # CONCATENATION: 50D text + 50D visual = 100D total
+        # Initialize optimized engine
+        engine = OptimizedLinUCBEngine(
+            dim=100,  # 50D for text + 50D for CLIP
             alpha=0.15,
             batch_size=5,
-            max_experts=6,
-            data_dir=data_dir
+            data_dir='data'
         )
-        logger.info("✅ Engine initialized successfully!")
-        return True
+        logger.info("✅ Optimized LinUCB engine initialized successfully")
     except Exception as e:
         logger.error(f"❌ Failed to initialize engine: {e}")
         logger.error(traceback.format_exc())
-        return False
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -367,143 +366,6 @@ def apply_user_filters(recommendations, filter_preferences):
     
     return filtered
 
-def should_include_watch(watch, filters):
-    """Check if a watch passes the user's filter criteria."""
-    try:
-        # Brand filter
-        if filters.get('brands') and watch.get('brand'):
-            if watch['brand'] not in filters['brands']:
-                return False
-        
-        # Price filter
-        price_range = filters.get('priceRange', [0, 1000000])
-        if watch.get('price'):
-            try:
-                price = float(watch['price'])
-                if price < price_range[0] or price > price_range[1]:
-                    return False
-            except:
-                pass
-        
-        # Watch type filter
-        if filters.get('watchTypes'):
-            specs = watch.get('specs', {})
-            watch_type = specs.get('watch_type', '')
-            second_type = specs.get('second_watch_type', '')
-            
-            if not any(wt in [watch_type, second_type] for wt in filters['watchTypes']):
-                return False
-        
-        # Case material filter
-        if filters.get('caseMaterials'):
-            specs = watch.get('specs', {})
-            case_material = specs.get('case_material', '')
-            if not any(mat in case_material for mat in filters['caseMaterials']):
-                return False
-        
-        # Movement filter
-        if filters.get('movements'):
-            specs = watch.get('specs', {})
-            movement = specs.get('movement', '') or specs.get('winding', '')
-            if not any(mov in movement for mov in filters['movements']):
-                return False
-        
-        # Dial color filter
-        if filters.get('dialColors'):
-            specs = watch.get('specs', {})
-            dial_color = specs.get('dial_color', '')
-            if dial_color not in filters['dialColors']:
-                return False
-        
-        # Diameter filter
-        min_diameter = filters.get('minDiameter')
-        max_diameter = filters.get('maxDiameter')
-        if min_diameter is not None or max_diameter is not None:
-            specs = watch.get('specs', {})
-            diameter_str = specs.get('diameter_mm', '')
-            if diameter_str:
-                try:
-                    diameter = float(diameter_str)
-                    if min_diameter and diameter < min_diameter:
-                        return False
-                    if max_diameter and diameter > max_diameter:
-                        return False
-                except:
-                    pass
-        
-        # Water resistance filter
-        min_wr = filters.get('waterResistance', 0)
-        if min_wr > 0:
-            specs = watch.get('specs', {})
-            wr_str = specs.get('waterproofing_meters', '') or specs.get('waterproofing', '')
-            if wr_str:
-                try:
-                    wr = int(wr_str)
-                    if wr < min_wr:
-                        return False
-                except:
-                    pass
-        
-        return True
-        
-    except Exception as e:
-        logger.warning(f"Error applying filters to watch {watch.get('watch_id', 'unknown')}: {e}")
-        return True  # Include watch if filtering fails
-
-def convert_numpy_to_python(obj):
-    """Recursively convert numpy arrays and types to Python native types for JSON serialization."""
-    if isinstance(obj, np.ndarray):
-        return obj.tolist()
-    elif isinstance(obj, np.integer):
-        return int(obj)
-    elif isinstance(obj, np.floating):
-        return float(obj)
-    elif isinstance(obj, dict):
-        return {key: convert_numpy_to_python(value) for key, value in obj.items()}
-    elif isinstance(obj, list):
-        return [convert_numpy_to_python(item) for item in obj]
-    else:
-        return obj
-
-def adjust_watch_score(watch, filter_preferences):
-    """Adjust watch score based on similarity preferences."""
-    try:
-        # Get similarity weights
-        clip_weight = filter_preferences.get('clipSimilarityWeight', 50) / 100.0
-        text_weight = filter_preferences.get('textSimilarityWeight', 50) / 100.0
-        
-        # Get current score
-        current_score = watch.get('score', 0.5)
-        
-        # For now, we'll modify the algorithm field to indicate the weighting
-        algorithm_info = f"LinUCB (Visual:{clip_weight*100:.0f}% + Vibe:{text_weight*100:.0f}%)"
-        
-        # Create a copy of the watch with updated info
-        adjusted_watch = watch.copy()
-        adjusted_watch['algorithm'] = algorithm_info
-        adjusted_watch['filter_preferences_applied'] = True
-        
-        # Ensure similarity weights are Python floats, not numpy types
-        adjusted_watch['similarity_weights'] = {
-            'clip': float(clip_weight), 
-            'text': float(text_weight)
-        }
-        
-        # Adjust confidence based on how well defined the preferences are
-        total_weight = clip_weight + text_weight
-        if total_weight > 0:
-            confidence_boost = min(0.1, total_weight * 0.1)
-            adjusted_watch['confidence'] = min(0.95, watch.get('confidence', 0.5) + confidence_boost)
-        
-        # Convert any numpy types to Python types
-        adjusted_watch = convert_numpy_to_python(adjusted_watch)
-        
-        return adjusted_watch
-        
-    except Exception as e:
-        logger.warning(f"Error adjusting watch score: {e}")
-        return convert_numpy_to_python(watch)
-
 @app.route('/api/feedback', methods=['POST'])
 def submit_feedback():
     """Submit user feedback for a watch."""
@@ -648,11 +510,7 @@ if __name__ == '__main__':
     logger.info("🚀 Starting Watch Finder API...")
     
     # Initialize engine
-    if initialize_engine():
-        logger.info("✅ Engine initialized successfully")
-    else:
-        logger.error("❌ Failed to initialize engine")
-        sys.exit(1)
+    initialize()
     
     # Start the server
     port = int(os.environ.get('PORT', 5001))

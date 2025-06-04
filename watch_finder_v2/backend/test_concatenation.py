@@ -28,9 +28,9 @@ def test_concatenation_approach():
     # Test 2: Test concatenated embedding creation
     print("\n📝 Test 2: Concatenated Embedding Creation")
     try:
-        # Create sample embeddings
-        text_emb = np.random.randn(1536)  # Simulate OpenAI embedding
-        clip_emb = np.random.randn(512)   # Simulate CLIP embedding
+        # Create sample REDUCED embeddings (50D each, not 1536D and 512D)
+        text_reduced = np.random.randn(50)  # Pre-reduced text embedding
+        clip_reduced = np.random.randn(50)  # Pre-reduced CLIP embedding
         
         # Test different weight combinations
         test_cases = [
@@ -42,7 +42,7 @@ def test_concatenation_approach():
         ]
         
         for text_weight, clip_weight in test_cases:
-            result = engine._create_weighted_embedding(text_emb, clip_emb, text_weight, clip_weight)
+            result = engine._create_weighted_embedding(text_reduced, clip_reduced, text_weight, clip_weight)
             
             # Check dimensions
             if len(result) != 100:
@@ -64,10 +64,10 @@ def test_concatenation_approach():
     # Test 3: Test structure of concatenated embedding
     print("\n📝 Test 3: Concatenated Embedding Structure")
     try:
-        text_emb = np.ones(1536)  # All ones for text
-        clip_emb = np.zeros(512)  # All zeros for visual
+        text_reduced = np.ones(50)  # All ones for text (50D)
+        clip_reduced = np.zeros(50)  # All zeros for visual (50D)
         
-        result = engine._create_weighted_embedding(text_emb, clip_emb, 1.0, 0.0)
+        result = engine._create_weighted_embedding(text_reduced, clip_reduced, 1.0, 0.0)
         
         # First half should be from text (non-zero), second half from visual (zero)
         first_half = result[:50]
@@ -90,8 +90,8 @@ def test_concatenation_approach():
     # Test 4: Test no CLIP embedding case
     print("\n📝 Test 4: Missing CLIP Embedding Handling")
     try:
-        text_emb = np.random.randn(1536)
-        result = engine._create_weighted_embedding(text_emb, None, 0.7, 0.3)
+        text_reduced = np.random.randn(50)  # 50D reduced text
+        result = engine._create_weighted_embedding(text_reduced, None, 0.7, 0.3)
         
         if len(result) != 100:
             print(f"❌ Wrong dimension with missing CLIP: {len(result)}")

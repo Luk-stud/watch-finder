@@ -24,6 +24,7 @@ from flask import Flask, request, jsonify, g
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
 import time
+import traceback
 
 # Add backend directory to path
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -35,8 +36,8 @@ from config import (
 
 # Import production session manager
 try:
+    from models.optimized_linucb_engine import OptimizedLinUCBEngine
     from models.production_session_manager import ProductionSessionManager
-    from models.linucb_engine import DynamicMultiExpertLinUCBEngine
 except ImportError as e:
     print(f"❌ Import error: {e}")
     print("Make sure you're running from the backend directory")
@@ -62,6 +63,7 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # Global state
 session_manager: Optional[ProductionSessionManager] = None
+engine: Optional[OptimizedLinUCBEngine] = None
 
 def sanitize_watch_for_json(watch: Dict[str, Any]) -> Dict[str, Any]:
     """Sanitize watch data for JSON serialization."""
@@ -78,7 +80,7 @@ def sanitize_watch_for_json(watch: Dict[str, Any]) -> Dict[str, Any]:
 
 def initialize_system() -> bool:
     """Initialize the production session management system."""
-    global session_manager
+    global session_manager, engine
     
     try:
         logger.info("🚀 Initializing Production Watch Recommendation System...")
@@ -86,23 +88,27 @@ def initialize_system() -> bool:
         # Create logs directory
         os.makedirs('logs', exist_ok=True)
         
-        # Initialize production session manager
-        session_manager = ProductionSessionManager(
-            data_dir=str(DATA_DIR),
-            session_timeout_minutes=60,
-            max_concurrent_sessions=1000,
-            cleanup_interval_seconds=300,
-            enable_persistence=True,
-            max_requests_per_minute=120  # Allow higher rate for production
+        # Initialize optimized engine with reduced dimension
+        engine = OptimizedLinUCBEngine(
+            dim=100,  # 50D for text + 50D for CLIP
+            alpha=0.15,
+            batch_size=5,
+            data_dir='data'
         )
         
-        logger.info("✅ Production system initialized successfully!")
+        # Initialize session manager with optimized engine
+        session_manager = ProductionSessionManager(
+            engine=engine,
+            session_expiry_minutes=60,
+            max_requests_per_minute=60
+        )
+        
+        logger.info("✅ Optimized LinUCB engine and session manager initialized successfully")
         return True
         
     except Exception as e:
         logger.error(f"❌ Failed to initialize system: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(traceback.format_exc())
         return False
 
 # Error handlers
@@ -265,8 +271,7 @@ def create_session():
             
     except Exception as e:
         logger.error(f"Error creating session: {e}")
-        import traceback
-        logger.error(f"Full traceback: {traceback.format_exc()}")
+        logger.error(traceback.format_exc())
         return jsonify({
             'status': 'error',
             'message': 'Failed to create session',
@@ -568,12 +573,17 @@ def signal_handler(signum, frame):
 
 def shutdown_system():
     """Graceful system shutdown."""
-    global session_manager
+    global session_manager, engine
     
     if session_manager:
         logger.info("🛑 Shutting down session manager...")
         session_manager.shutdown()
         session_manager = None
+    
+    if engine:
+        logger.info("🛑 Shutting down engine...")
+        engine.shutdown()
+        engine = None
     
     logger.info("✅ Shutdown complete")
 

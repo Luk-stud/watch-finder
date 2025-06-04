@@ -31,113 +31,44 @@ import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
-from .linucb_engine import DynamicMultiExpertLinUCBEngine
+from .optimized_linucb_engine import OptimizedLinUCBEngine
 
 logger = logging.getLogger(__name__)
 
-@dataclass
-class SessionState:
-    """Complete session state with isolation."""
-    session_id: str
-    created_at: datetime
-    last_activity: datetime
-    
-    # User interaction tracking
-    liked_watches: List[int] = field(default_factory=list)
-    disliked_watches: List[int] = field(default_factory=list)
-    shown_watches: Set[int] = field(default_factory=set)
-    current_batch: List[int] = field(default_factory=list)
-    
-    # Session metrics
-    total_interactions: int = 0
-    total_likes: int = 0
-    total_dislikes: int = 0
-    total_recommendations_served: int = 0
-    session_duration_seconds: float = 0.0
-    
-    # Client information
-    user_agent: str = ""
-    ip_address: str = ""
-    user_id: Optional[str] = None
-    
-    # Session-specific recommendation state
-    exploration_mode: bool = True
-    experts_created: int = 0
-    current_exploration_factor: float = 1.0
-    
-    # Rate limiting
-    requests_this_minute: int = 0
-    last_minute_timestamp: int = 0
-    
-    # Performance tracking
-    avg_response_time_ms: float = 0.0
-    total_requests: int = 0
+class Session:
+    """Tracks session state and rate limiting."""
+    def __init__(self, session_id: str):
+        self.session_id = session_id
+        self.created_at = datetime.now()
+        self.last_activity = datetime.now()
+        self.shown_watches: Set[int] = set()
+        self.total_recommendations_served = 0
+        self.request_timestamps: List[float] = []
+        self.response_times: List[float] = []
     
     def update_activity(self):
         """Update last activity timestamp."""
         self.last_activity = datetime.now()
-        self.session_duration_seconds = (self.last_activity - self.created_at).total_seconds()
     
-    def add_interaction(self, watch_id: int, feedback: str):
-        """Add user interaction."""
-        self.update_activity()
-        self.total_interactions += 1
+    def check_rate_limit(self, max_requests_per_minute: int) -> bool:
+        """Check if session has exceeded rate limit."""
+        now = time.time()
+        minute_ago = now - 60
         
-        if feedback == 'like':
-            if watch_id not in self.liked_watches:
-                self.liked_watches.append(watch_id)
-                self.total_likes += 1
-        elif feedback == 'dislike':
-            if watch_id not in self.disliked_watches:
-                self.disliked_watches.append(watch_id)
-                self.total_dislikes += 1
-    
-    def check_rate_limit(self, max_requests_per_minute: int = 60) -> bool:
-        """Check if session is within rate limits."""
-        current_minute = int(time.time() // 60)
+        # Remove old timestamps
+        self.request_timestamps = [ts for ts in self.request_timestamps if ts > minute_ago]
         
-        if current_minute != self.last_minute_timestamp:
-            # New minute, reset counter
-            self.requests_this_minute = 0
-            self.last_minute_timestamp = current_minute
+        # Check rate limit
+        if len(self.request_timestamps) >= max_requests_per_minute:
+            return False
         
-        self.requests_this_minute += 1
-        return self.requests_this_minute <= max_requests_per_minute
+        # Add current request
+        self.request_timestamps.append(now)
+        return True
     
     def update_performance_metrics(self, response_time_ms: float):
-        """Update performance metrics."""
-        self.total_requests += 1
-        # Exponential moving average
-        alpha = 0.1
-        self.avg_response_time_ms = (alpha * response_time_ms + 
-                                   (1 - alpha) * self.avg_response_time_ms)
-    
-    def is_expired(self, timeout_minutes: int = 60) -> bool:
-        """Check if session is expired."""
-        return (datetime.now() - self.last_activity).total_seconds() > (timeout_minutes * 60)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization."""
-        return {
-            'session_id': self.session_id,
-            'created_at': self.created_at.isoformat(),
-            'last_activity': self.last_activity.isoformat(),
-            'liked_watches': self.liked_watches,
-            'disliked_watches': self.disliked_watches,
-            'shown_watches': list(self.shown_watches),
-            'total_interactions': self.total_interactions,
-            'total_likes': self.total_likes,
-            'total_dislikes': self.total_dislikes,
-            'total_recommendations_served': self.total_recommendations_served,
-            'session_duration_seconds': self.session_duration_seconds,
-            'user_agent': self.user_agent,
-            'ip_address': self.ip_address,
-            'user_id': self.user_id,
-            'exploration_mode': self.exploration_mode,
-            'experts_created': self.experts_created,
-            'avg_response_time_ms': self.avg_response_time_ms,
-            'total_requests': self.total_requests
-        }
+        """Update response time metrics."""
+        self.response_times.append(response_time_ms)
 
 class ProductionSessionManager:
     """
@@ -171,8 +102,7 @@ class ProductionSessionManager:
         self.max_requests_per_minute = max_requests_per_minute
         
         # Thread-safe session storage
-        self.sessions: Dict[str, SessionState] = {}
-        self.session_engines: Dict[str, DynamicMultiExpertLinUCBEngine] = {}
+        self.sessions: Dict[str, Session] = {}
         self.session_lock = threading.RLock()
         
         # Persistence
@@ -184,8 +114,6 @@ class ProductionSessionManager:
         self.global_metrics = {
             'total_sessions_created': 0,
             'total_recommendations_served': 0,
-            'total_user_interactions': 0,
-            'avg_session_duration_minutes': 0.0,
             'peak_concurrent_sessions': 0,
             'total_server_uptime_seconds': 0.0,
             'start_time': datetime.now()
@@ -287,7 +215,7 @@ class ProductionSessionManager:
     def create_session(self, 
                       user_agent: str = "",
                       ip_address: str = "",
-                      user_id: Optional[str] = None) -> Tuple[str, Dict[str, Any]]:
+                      user_id: Optional[str] = None) -> Tuple[str, List[Dict[str, Any]]]:
         """
         Create a new isolated session.
         
@@ -304,31 +232,9 @@ class ProductionSessionManager:
             session_id = str(uuid.uuid4())
             current_time = datetime.now()
             
-            session = SessionState(
-                session_id=session_id,
-                created_at=current_time,
-                last_activity=current_time,
-                user_agent=user_agent,
-                ip_address=ip_address,
-                user_id=user_id
-            )
-            
-            # Create isolated LinUCB engine for this session
-            session_engine = DynamicMultiExpertLinUCBEngine(
-                dim=200,  # INCREASED: Better feature representation
-                alpha=0.15,  # Fast exploitation after feedback
-                batch_size=5,
-                num_experts=0,  # Always start with 0 - create dynamically
-                max_experts=6,
-                similarity_threshold=0.85,  # High threshold for distinct preferences
-                initialization_strategy='clean_dynamic',  # Clean approach
-                min_likes_for_first_expert=1,  # First like = first expert
-                min_likes_for_new_expert=1,   # One like per expert
-                data_dir=str(self.data_dir)
-            )
+            session = Session(session_id)
             
             self.sessions[session_id] = session
-            self.session_engines[session_id] = session_engine
             
             # Update global metrics
             self.global_metrics['total_sessions_created'] += 1
@@ -340,12 +246,17 @@ class ProductionSessionManager:
         try:
             start_time = time.time()
             
-            recommendations = session_engine.get_recommendations(
+            # Initialize session in engine with default weights
+            self.engine.create_session(session_id)
+            
+            # Get recommendations
+            recommendations = self.engine.get_recommendations(
                 session_id=session_id,
-                context=np.zeros(200),  # Initial empty context
+                context=np.array([0.5, 0.5]),  # Equal weights initially
                 exclude_ids=set()
             )
             
+            # Update metrics
             response_time_ms = (time.time() - start_time) * 1000
             session.update_performance_metrics(response_time_ms)
             session.total_recommendations_served += len(recommendations)
@@ -362,7 +273,6 @@ class ProductionSessionManager:
             # Cleanup failed session
             with self.session_lock:
                 self.sessions.pop(session_id, None)
-                self.session_engines.pop(session_id, None)
             raise e
     
     def get_recommendations(self, 
@@ -379,25 +289,19 @@ class ProductionSessionManager:
         if not session.check_rate_limit(self.max_requests_per_minute):
             raise ValueError(f"Rate limit exceeded for session {session_id}")
         
-        # Get session engine
-        with self.session_lock:
-            engine = self.session_engines.get(session_id)
-            if not engine:
-                raise ValueError(f"Session engine not found for {session_id}")
-        
         # Get recommendations
         start_time = time.time()
         
         exclude_ids = exclude_ids or set()
         exclude_ids.update(session.shown_watches)
         
-        recommendations = engine.get_recommendations(
+        recommendations = self.engine.get_recommendations(
             session_id=session_id,
-            context=np.zeros(200),  # Could be enhanced with user profile
+            context=np.array([0.5, 0.5]),  # Use stored weights from engine
             exclude_ids=exclude_ids
         )
         
-        # Update session state
+        # Update metrics
         response_time_ms = (time.time() - start_time) * 1000
         session.update_performance_metrics(response_time_ms)
         session.total_recommendations_served += len(recommendations)
@@ -410,50 +314,37 @@ class ProductionSessionManager:
         
         return recommendations
     
-    def add_feedback(self, 
-                    session_id: str,
-                    watch_id: int,
-                    feedback: str) -> bool:
-        """Add user feedback with validation."""
-        
+    def update_feedback(self,
+                       session_id: str,
+                       watch_id: int,
+                       liked: bool) -> bool:
+        """Process user feedback."""
         # Validate session
         session = self._validate_and_get_session(session_id)
         if not session:
             raise ValueError(f"Session {session_id} not found or expired")
         
-        # Validate feedback
-        if feedback not in ['like', 'dislike']:
-            raise ValueError(f"Invalid feedback: {feedback}")
-        
-        # Get session engine
-        with self.session_lock:
-            engine = self.session_engines.get(session_id)
-            if not engine:
-                raise ValueError(f"Session engine not found for {session_id}")
-        
-        # Add feedback to session
-        session.add_interaction(watch_id, feedback)
-        
-        # Add feedback to engine
-        reward = 1.0 if feedback == 'like' else -1.0
-        context = np.zeros(200)  # Could be enhanced
-        
-        engine.update(session_id, watch_id, reward, context)
-        
-        self.global_metrics['total_user_interactions'] += 1
-        
-        logger.info(f"📝 Session {session_id}: {feedback} for watch {watch_id}")
-        
-        return True
+        # Update engine
+        try:
+            self.engine.update(
+                session_id=session_id,
+                watch_id=watch_id,
+                reward=1.0 if liked else 0.0,
+                context=np.array([0.5, 0.5])  # Use stored weights from engine
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Error updating feedback: {e}")
+            return False
     
-    def _validate_and_get_session(self, session_id: str) -> Optional[SessionState]:
+    def _validate_and_get_session(self, session_id: str) -> Optional[Session]:
         """Validate session exists and is not expired."""
         with self.session_lock:
             session = self.sessions.get(session_id)
             if not session:
                 return None
             
-            if session.is_expired(self.session_timeout_minutes):
+            if datetime.now() - session.last_activity > timedelta(minutes=self.session_timeout_minutes):
                 # Clean up expired session
                 self._cleanup_session(session_id)
                 return None
@@ -468,7 +359,7 @@ class ProductionSessionManager:
             expired_sessions = []
             
             for session_id, session in self.sessions.items():
-                if session.is_expired(self.session_timeout_minutes):
+                if datetime.now() - session.last_activity > timedelta(minutes=self.session_timeout_minutes):
                     expired_sessions.append(session_id)
             
             for session_id in expired_sessions:
@@ -480,11 +371,10 @@ class ProductionSessionManager:
     def _cleanup_session(self, session_id: str):
         """Clean up a specific session completely."""
         session = self.sessions.pop(session_id, None)
-        engine = self.session_engines.pop(session_id, None)
         
         if session:
             # Record analytics for ALL cleaned sessions
-            analytics = session.to_dict()
+            analytics = session.__dict__
             analytics['cleanup_reason'] = 'expired'
             analytics['cleanup_time'] = datetime.now().isoformat()
             
@@ -492,35 +382,28 @@ class ProductionSessionManager:
             self.session_analytics.append(analytics)
             
             # Update global metrics
-            duration_minutes = session.session_duration_seconds / 60.0
+            duration_minutes = (datetime.now() - session.created_at).total_seconds() / 60.0
             total_sessions = self.global_metrics['total_sessions_created']
-            current_avg = self.global_metrics['avg_session_duration_minutes']
+            current_avg = self.global_metrics['total_recommendations_served'] / total_sessions
             
             # Update moving average only if we have valid data
             if total_sessions > 0:
-                self.global_metrics['avg_session_duration_minutes'] = (
-                    (current_avg * (total_sessions - 1) + duration_minutes) / total_sessions
+                self.global_metrics['total_recommendations_served'] = (
+                    current_avg * (total_sessions - 1) + session.total_recommendations_served
                 )
             
             logger.info(f"🧹 Session {session_id} cleaned up (duration: {duration_minutes:.1f}min)")
         
-        # CRITICAL FIX: Explicitly clean up engine to prevent memory leaks
-        if engine:
+        # CRITICAL FIX: Explicitly clean up session to prevent memory leaks
+        if session:
             try:
-                # Clear engine data structures
-                if hasattr(engine, 'experts'):
-                    engine.experts.clear()
-                if hasattr(engine, 'session_liked_watches'):
-                    engine.session_liked_watches.pop(session_id, None)
-                if hasattr(engine, 'session_interaction_counts'):
-                    engine.session_interaction_counts.pop(session_id, None)
-                logger.info(f"🧹 Engine for session {session_id} cleaned up")
+                # Clear session data structures
+                session.shown_watches.clear()
+                session.request_timestamps.clear()
+                session.response_times.clear()
+                logger.info(f"🧹 Session {session_id} cleaned up")
             except Exception as e:
-                logger.error(f"Error cleaning up engine for session {session_id}: {e}")
-            finally:
-                # Force garbage collection
-                import gc
-                gc.collect()
+                logger.error(f"Error cleaning up session {session_id}: {e}")
     
     def _persist_active_sessions(self):
         """Persist active sessions to database."""
@@ -533,7 +416,7 @@ class ProductionSessionManager:
             
             with self.session_lock:
                 for session_id, session in self.sessions.items():
-                    session_data = json.dumps(session.to_dict())
+                    session_data = json.dumps(session.__dict__)
                     
                     cursor.execute('''
                         INSERT OR REPLACE INTO sessions 
@@ -558,7 +441,7 @@ class ProductionSessionManager:
         if not session:
             return None
         
-        return session.to_dict()
+        return session.__dict__
     
     def get_system_metrics(self) -> Dict[str, Any]:
         """Get comprehensive system metrics."""
@@ -632,7 +515,7 @@ class ProductionSessionManager:
         """Get recent session analytics."""
         return list(self.session_analytics)[-limit:]
 
-    def reset_session(self, session_id: str) -> Tuple[str, Dict[str, Any]]:
+    def reset_session(self, session_id: str) -> Tuple[str, List[Dict[str, Any]]]:
         """Reset a session by cleaning up the old one and creating a new one."""
         
         # Get old session info for potential user data transfer
@@ -646,12 +529,12 @@ class ProductionSessionManager:
             with self.session_lock:
                 if session_id in self.sessions:
                     # Mark as manual reset instead of expired
-                    analytics = old_session.to_dict()
+                    analytics = old_session.__dict__
                     analytics['cleanup_reason'] = 'manual_reset'
                     analytics['cleanup_time'] = datetime.now().isoformat()
                     self.session_analytics.append(analytics)
                     
-                    # Clean up old session and engine
+                    # Clean up old session
                     self._cleanup_session(session_id)
                     logger.info(f"🔄 Reset session {session_id}")
         

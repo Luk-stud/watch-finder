@@ -58,7 +58,7 @@ class Arm:
         """Get coefficient vector, computing if necessary."""
         if self.theta is None:
             try:
-                self.theta = np.linalg.solve(self.A, self.b)
+            self.theta = np.linalg.solve(self.A, self.b)
             except np.linalg.LinAlgError:
                 # Handle singular matrix with regularization
                 regularized_A = self.A + 0.01 * np.identity(self.A.shape[0])
@@ -263,7 +263,7 @@ class DynamicMultiExpertLinUCBEngine:
         logger.info("🚀 CLEAN APPROACH ACTIVATED!")
     
     def _load_data(self) -> None:
-        """Load watch data and both text and CLIP embeddings."""
+        """Load watch data and pre-compute reduced embeddings for fast concatenation."""
         try:
             # Load watch metadata
             metadata_path = os.path.join(self.data_dir, 'watch_text_metadata.pkl')
@@ -306,7 +306,14 @@ class DynamicMultiExpertLinUCBEngine:
                 self._raw_embeddings = valid_raw_embeddings[:min(1000, len(valid_raw_embeddings))]  # Limit for memory
                 logger.info(f"📊 Collected {len(self._raw_embeddings)} raw embeddings for PCA fitting")
             
-            # Convert metadata list to dictionary and store embeddings
+            # PRE-COMPUTE REDUCED EMBEDDINGS
+            logger.info("🔧 Pre-computing reduced embeddings for fast concatenation...")
+            
+            # Initialize storage for reduced embeddings
+            self.watch_text_reduced: Dict[int, np.ndarray] = {}  # watch_id -> 50D reduced text embedding
+            self.watch_clip_reduced: Dict[int, np.ndarray] = {}  # watch_id -> 50D reduced CLIP embedding
+            
+            # Convert metadata list to dictionary and process embeddings
             for idx, watch_dict in enumerate(metadata_list):
                 try:
                     watch_id = watch_dict.get('index', idx)
@@ -323,32 +330,43 @@ class DynamicMultiExpertLinUCBEngine:
                     
                     self.watch_data[watch_id] = enhanced_watch
                     
-                    # Store ORIGINAL text embedding (do NOT reduce here)
+                    # PRE-COMPUTE TEXT EMBEDDING (reduced to 50D)
                     if 'text_embedding' in watch_dict and isinstance(watch_dict['text_embedding'], np.ndarray):
-                        raw_embedding = watch_dict['text_embedding']
-                        self.watch_embeddings[watch_id] = raw_embedding  # FIXED: Store original, reduce later
+                        raw_text_embedding = watch_dict['text_embedding']
                     elif watch_id < len(text_embeddings_array):
-                        raw_embedding = text_embeddings_array[watch_id]
-                        self.watch_embeddings[watch_id] = raw_embedding  # FIXED: Store original, reduce later
+                        raw_text_embedding = text_embeddings_array[watch_id]
+                    else:
+                        raw_text_embedding = np.zeros(1536)  # Fallback
                     
-                    # Store CLIP embedding separately (keep original size for weighted combination)
+                    # Reduce text embedding to half dimension
+                    text_reduced = self._reduce_features(raw_text_embedding, target_dim=self.dim // 2)
+                    self.watch_text_reduced[watch_id] = text_reduced
+                    
+                    # PRE-COMPUTE CLIP EMBEDDING (reduced to 50D)
                     if watch_id < len(clip_embeddings_array):
-                        if not hasattr(self, 'watch_clip_embeddings'):
-                            self.watch_clip_embeddings = {}
-                        self.watch_clip_embeddings[watch_id] = clip_embeddings_array[watch_id]
+                        raw_clip_embedding = clip_embeddings_array[watch_id]
+                        clip_reduced = self._reduce_clip_embedding(raw_clip_embedding, target_dim=self.dim // 2)
+                    else:
+                        clip_reduced = np.zeros(self.dim // 2)  # Fallback
+                    
+                    self.watch_clip_reduced[watch_id] = clip_reduced
                     
                     # All watches start unassigned
                     self.unassigned_watches.add(watch_id)
+                    
+                    # Progress logging
+                    if (idx + 1) % 100 == 0:
+                        logger.info(f"⚙️  Pre-computed embeddings for {idx + 1}/{len(metadata_list)} watches")
                     
                 except Exception as e:
                     logger.error(f"Error processing watch {idx}: {e}")
                     continue
             
-            logger.info(f"✅ Processed {len(self.watch_data)} watches with text and CLIP embeddings")
-            logger.info(f"📊 Text embeddings: {len(self.watch_embeddings)} watches")
-            logger.info(f"🖼️ CLIP embeddings: {len(getattr(self, 'watch_clip_embeddings', {})) if hasattr(self, 'watch_clip_embeddings') else 0} watches")
+            logger.info(f"✅ Processed {len(self.watch_data)} watches with pre-computed embeddings")
+            logger.info(f"📊 Text reduced embeddings: {len(self.watch_text_reduced)} watches")
+            logger.info(f"🖼️ CLIP reduced embeddings: {len(self.watch_clip_reduced)} watches")
             
-            logger.info("✅ LinUCB engine initialized successfully!")
+            logger.info("✅ LinUCB engine initialized successfully with pre-computed embeddings!")
         except Exception as e:
             logger.error(f"❌ Failed to load data: {e}")
             self._create_fallback_data()
@@ -597,12 +615,12 @@ class DynamicMultiExpertLinUCBEngine:
             
             # Get CLIP embedding if available
             clip_embedding = None
-            if hasattr(self, 'watch_clip_embeddings') and watch_id in self.watch_clip_embeddings:
-                clip_embedding = self.watch_clip_embeddings[watch_id]
+            if hasattr(self, 'watch_clip_reduced') and watch_id in self.watch_clip_reduced:
+                clip_embedding = self.watch_clip_reduced[watch_id]
             
             # Create weighted combined embedding
             combined_embedding = self._create_weighted_embedding(
-                self.watch_embeddings[watch_id], clip_embedding, text_weight, clip_weight
+                self.watch_text_reduced[watch_id], clip_embedding, text_weight, clip_weight
             )
             
             # Get or create arm for this watch
@@ -624,18 +642,13 @@ class DynamicMultiExpertLinUCBEngine:
         scores.sort(key=lambda x: x[1], reverse=True)
         return [self._format_recommendation(watch_id, ucb, f'expert_{expert.expert_id}') for watch_id, ucb in scores[:self.batch_size]]
     
-    def _create_weighted_embedding(self, text_embedding: np.ndarray, clip_embedding: Optional[np.ndarray], 
+    def _create_weighted_embedding(self, text_reduced: np.ndarray, clip_reduced: Optional[np.ndarray], 
                                  text_weight: float, clip_weight: float) -> np.ndarray:
-        """Create a concatenated combination of text and CLIP embeddings."""
-        # Reduce text embedding to half of target dimension (50D for 100D total)
-        text_reduced = self._reduce_features(text_embedding, target_dim=self.dim // 2)
-        
-        if clip_embedding is None:
+        """Create a concatenated combination of pre-reduced text and CLIP embeddings."""
+        # Use pre-computed reduced embeddings (both should be 50D)
+        if clip_reduced is None:
             # If no CLIP embedding, pad with zeros for second half
             clip_reduced = np.zeros(self.dim // 2)
-        else:
-            # Reduce CLIP embedding to half dimension
-            clip_reduced = self._reduce_clip_embedding(clip_embedding, target_dim=self.dim // 2)
         
         # Normalize both halves independently
         text_norm = text_reduced / (np.linalg.norm(text_reduced) + 1e-8)
@@ -785,16 +798,16 @@ class DynamicMultiExpertLinUCBEngine:
             self.session_experts[session_id] = []
         
         # Get original watch embedding (text)
-        if watch_id not in self.watch_embeddings:
-            logger.warning(f"Watch {watch_id} has no embedding, skipping update")
+        if watch_id not in self.watch_text_reduced:
+            logger.warning(f"Watch {watch_id} has no text embedding, skipping update")
             return
             
-        original_text_embedding = self.watch_embeddings[watch_id]
+        original_text_embedding = self.watch_text_reduced[watch_id]
         
         # Get CLIP embedding
         clip_embedding = None
-        if hasattr(self, 'watch_clip_embeddings') and watch_id in self.watch_clip_embeddings:
-            clip_embedding = self.watch_clip_embeddings[watch_id]
+        if hasattr(self, 'watch_clip_reduced') and watch_id in self.watch_clip_reduced:
+            clip_embedding = self.watch_clip_reduced[watch_id]
         
         # Get stored session weights or use defaults
         if session_id in self.session_embedding_weights:
@@ -943,6 +956,10 @@ class DynamicMultiExpertLinUCBEngine:
         """Create minimal fallback data if loading fails."""
         logger.warning("Creating fallback data for testing")
         
+        # Initialize storage for reduced embeddings
+        self.watch_text_reduced: Dict[int, np.ndarray] = {}
+        self.watch_clip_reduced: Dict[int, np.ndarray] = {}
+        
         for i in range(20):  # Create more test watches
             watch_id = i
             self.watch_data[watch_id] = {
@@ -966,12 +983,16 @@ class DynamicMultiExpertLinUCBEngine:
                 'score': 0.0
             }
             
-            # Create diverse embeddings for different brands
-            base_embedding = np.random.randn(1536) * 0.1
+            # Create diverse reduced embeddings for different brands
+            text_reduced = np.random.randn(self.dim // 2) * 0.1
             brand_offset = (i % 5) * 2.0  # Different brands have different embedding regions
-            base_embedding[:10] += brand_offset
+            text_reduced[:10] += brand_offset
             
-            self.watch_embeddings[watch_id] = base_embedding
+            clip_reduced = np.random.randn(self.dim // 2) * 0.1
+            clip_reduced[:5] += brand_offset * 0.5  # Correlated but different from text
+            
+            self.watch_text_reduced[watch_id] = text_reduced
+            self.watch_clip_reduced[watch_id] = clip_reduced
             self.unassigned_watches.add(watch_id)
     
     def get_watches(self, watch_ids: Set[int]) -> List[Dict[str, Any]]:
