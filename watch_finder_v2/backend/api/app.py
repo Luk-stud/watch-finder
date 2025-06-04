@@ -37,19 +37,29 @@ app = Flask(__name__)
 
 # Environment-specific CORS configuration
 ENVIRONMENT = os.getenv('ENVIRONMENT', 'development')
+
+# Always allow your Netlify domain for simplicity
+allowed_origins = [
+    "https://watchrecomender.netlify.app",
+    "https://www.watchrecomender.netlify.app",
+    "https://deploy-preview-*--watchrecomender.netlify.app",
+    "http://localhost:3000",  # Local development
+    "http://localhost:5173",  # Vite dev server
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173"
+]
+
 if ENVIRONMENT == 'production':
-    # Production CORS - restrict to your Netlify domain
-    NETLIFY_DOMAIN = os.getenv('NETLIFY_DOMAIN', 'your-netlify-app.netlify.app')
-    CORS(app, origins=[
-        f"https://{NETLIFY_DOMAIN}",
-        f"https://www.{NETLIFY_DOMAIN}",
-        "https://deploy-preview-*--your-netlify-app.netlify.app"  # Preview deployments
-    ])
-    logger.info(f"🔒 Production CORS enabled for: {NETLIFY_DOMAIN}")
+    # Production CORS - restrict to specific domains
+    NETLIFY_DOMAIN = os.getenv('NETLIFY_DOMAIN', 'watchrecomender.netlify.app')
+    CORS(app, origins=allowed_origins, methods=['GET', 'POST', 'OPTIONS'], 
+         allow_headers=['Content-Type', 'Authorization'], supports_credentials=True)
+    logger.info(f"🔒 Production CORS enabled for: {allowed_origins}")
 else:
-    # Development CORS - allow all origins
-    CORS(app)
-    logger.info("🔓 Development CORS enabled (all origins)")
+    # Development CORS - allow all origins plus specific ones
+    CORS(app, origins=["*"] + allowed_origins, methods=['GET', 'POST', 'OPTIONS'], 
+         allow_headers=['Content-Type', 'Authorization'], supports_credentials=True)
+    logger.info("🔓 Development CORS enabled (all origins + specific domains)")
 
 # Global engine instance
 engine = None
