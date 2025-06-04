@@ -1,4 +1,4 @@
-# Minimal requirements for simple Flask app
+# Minimal requirements for simple Flask app (secure versions)
 Flask>=3.0.0
 Flask-Cors>=4.0.0
-Werkzeug>=3.0.0 
+Werkzeug>=3.1.0 
