@@ -238,6 +238,7 @@ class DynamicMultiExpertLinUCBEngine:
         self.session_liked_watches: Dict[str, List[int]] = {}  # session_id -> [liked_watch_ids]
         self.session_experts: Dict[str, List[int]] = {}  # session_id -> [expert_ids] 
         self.session_interaction_counts: Dict[str, int] = {}  # session_id -> interaction count
+        self.session_embedding_weights: Dict[str, Tuple[float, float]] = {}  # session_id -> (clip_weight, text_weight)
         
         # Watch data
         self.watch_data: Dict[int, Dict[str, Any]] = {}
@@ -297,7 +298,7 @@ class DynamicMultiExpertLinUCBEngine:
                 else:
                     continue
                     
-                if len(raw_embedding) > self.dim:  # Only collect embeddings that need reduction
+                if len(raw_embedding) > self.dim // 2:  # Only collect embeddings that need reduction for text half
                     valid_raw_embeddings.append(raw_embedding)
             
             # Store raw embeddings for PCA fitting
@@ -322,13 +323,13 @@ class DynamicMultiExpertLinUCBEngine:
                     
                     self.watch_data[watch_id] = enhanced_watch
                     
-                    # Store text embedding with proper dimension reduction
+                    # Store ORIGINAL text embedding (do NOT reduce here)
                     if 'text_embedding' in watch_dict and isinstance(watch_dict['text_embedding'], np.ndarray):
                         raw_embedding = watch_dict['text_embedding']
-                        self.watch_embeddings[watch_id] = self._reduce_features(raw_embedding, target_dim=self.dim)
+                        self.watch_embeddings[watch_id] = raw_embedding  # FIXED: Store original, reduce later
                     elif watch_id < len(text_embeddings_array):
                         raw_embedding = text_embeddings_array[watch_id]
-                        self.watch_embeddings[watch_id] = self._reduce_features(raw_embedding, target_dim=self.dim)
+                        self.watch_embeddings[watch_id] = raw_embedding  # FIXED: Store original, reduce later
                     
                     # Store CLIP embedding separately (keep original size for weighted combination)
                     if watch_id < len(clip_embeddings_array):
@@ -466,24 +467,34 @@ class DynamicMultiExpertLinUCBEngine:
         elif exclude_ids is None:
             exclude_ids = set()
         
-        # Handle context vectors of different sizes
-        if len(context) >= 2:
-            clip_weight = context[0]
-            text_weight = context[1]
+        # Handle embedding weights - SET ONCE PER SESSION
+        if session_id not in self.session_embedding_weights:
+            # First time for this session - extract and store weights
+            if len(context) >= 2:
+                clip_weight = context[0]
+                text_weight = context[1]
+            else:
+                # Fallback for empty or too-small context
+                clip_weight = text_weight = 0.5
+            
+            # Validate and normalize weights
+            clip_weight = max(0.0, min(1.0, clip_weight))  # Bound between 0 and 1
+            text_weight = max(0.0, min(1.0, text_weight))  # Bound between 0 and 1
+            
+            total_weight = clip_weight + text_weight
+            if total_weight > 0:
+                clip_weight = clip_weight / total_weight
+                text_weight = text_weight / total_weight
+            else:
+                clip_weight = text_weight = 0.5
+            
+            # Store weights for this session
+            self.session_embedding_weights[session_id] = (clip_weight, text_weight)
+            logger.info(f"🎯 Session {session_id}: Embedding weights set to Visual={clip_weight:.2f}, Vibe={text_weight:.2f}")
         else:
-            # Fallback for empty or too-small context
-            clip_weight = text_weight = 0.5
-        
-        # Validate and normalize weights
-        clip_weight = max(0.0, min(1.0, clip_weight))  # Bound between 0 and 1
-        text_weight = max(0.0, min(1.0, text_weight))  # Bound between 0 and 1
-        
-        total_weight = clip_weight + text_weight
-        if total_weight > 0:
-            clip_weight = clip_weight / total_weight
-            text_weight = text_weight / total_weight
-        else:
-            clip_weight = text_weight = 0.5
+            # Use stored weights for this session
+            clip_weight, text_weight = self.session_embedding_weights[session_id]
+            logger.info(f"🎯 Session {session_id}: Using stored weights Visual={clip_weight:.2f}, Vibe={text_weight:.2f}")
         
         # Get available watches (excluding already seen ones)
         available_watches = [
@@ -507,7 +518,6 @@ class DynamicMultiExpertLinUCBEngine:
         if not session_experts:
             # Random exploration
             logger.info(f"🔍 RANDOM EXPLORATION (session {session_num}) - no experts yet")
-            logger.info(f"🎯 Similarity weights: Visual={clip_weight:.2f}, Vibe={text_weight:.2f}")
             
             # Random selection from available watches
             selected_watches = np.random.choice(
@@ -522,7 +532,6 @@ class DynamicMultiExpertLinUCBEngine:
         # Expert-based recommendations
         logger.info(f"🎯 EXPERT-BASED RECOMMENDATIONS (session {session_num})")
         logger.info(f"   👥 Active experts: {len(session_experts)}")
-        logger.info(f"   🎯 Similarity weights: Visual={clip_weight:.2f}, Vibe={text_weight:.2f}")
         
         recommendations = []
         expert_counts = {}
@@ -618,11 +627,8 @@ class DynamicMultiExpertLinUCBEngine:
     def _create_weighted_embedding(self, text_embedding: np.ndarray, clip_embedding: Optional[np.ndarray], 
                                  text_weight: float, clip_weight: float) -> np.ndarray:
         """Create a concatenated combination of text and CLIP embeddings."""
-        # Ensure text embedding is reduced to target dimension
-        if len(text_embedding) != self.dim // 2:  # Half dimension for text
-            text_reduced = self._reduce_features(text_embedding, target_dim=self.dim // 2)
-        else:
-            text_reduced = text_embedding
+        # Reduce text embedding to half of target dimension (50D for 100D total)
+        text_reduced = self._reduce_features(text_embedding, target_dim=self.dim // 2)
         
         if clip_embedding is None:
             # If no CLIP embedding, pad with zeros for second half
@@ -778,12 +784,31 @@ class DynamicMultiExpertLinUCBEngine:
         if session_id not in self.session_experts:
             self.session_experts[session_id] = []
         
-        # Get watch embedding
+        # Get original watch embedding (text)
         if watch_id not in self.watch_embeddings:
             logger.warning(f"Watch {watch_id} has no embedding, skipping update")
             return
             
-        watch_embedding = self.watch_embeddings[watch_id]
+        original_text_embedding = self.watch_embeddings[watch_id]
+        
+        # Get CLIP embedding
+        clip_embedding = None
+        if hasattr(self, 'watch_clip_embeddings') and watch_id in self.watch_clip_embeddings:
+            clip_embedding = self.watch_clip_embeddings[watch_id]
+        
+        # Get stored session weights or use defaults
+        if session_id in self.session_embedding_weights:
+            clip_weight, text_weight = self.session_embedding_weights[session_id]
+        else:
+            # Fallback to default weights if not stored
+            clip_weight = text_weight = 0.5
+            self.session_embedding_weights[session_id] = (clip_weight, text_weight)
+            logger.info(f"🎯 Session {session_id}: Using default weights Visual={clip_weight:.2f}, Vibe={text_weight:.2f}")
+        
+        # Create concatenated embedding for expert interactions
+        watch_embedding = self._create_weighted_embedding(
+            original_text_embedding, clip_embedding, text_weight, clip_weight
+        )
         
         # Extend context to full dimension if needed (for LinUCB algorithm)
         if len(context) < self.dim:
@@ -806,7 +831,7 @@ class DynamicMultiExpertLinUCBEngine:
                 expert_id = self._create_new_expert()
                 self.session_experts[session_id].append(expert_id)
                 
-                # Add the liked watch to define this expert's preferences
+                # Add the liked watch to define this expert's preferences (using concatenated embedding)
                 expert = self.experts[expert_id]
                 expert.add_liked_watch(watch_id, watch_embedding)
                 
@@ -820,7 +845,7 @@ class DynamicMultiExpertLinUCBEngine:
         
         # CASE 2: EXPERTS EXIST - assign to best expert or create new one
         if reward > 0:  # User liked the watch
-            # Find the best existing expert for this watch
+            # Find the best existing expert for this watch (using concatenated embedding for similarity)
             best_expert_id = None
             best_similarity = -1.0
             

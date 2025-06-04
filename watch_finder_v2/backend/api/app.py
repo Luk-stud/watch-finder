@@ -325,6 +325,16 @@ def get_recommendations():
         # Convert all numpy types to Python types for JSON serialization
         json_safe_recommendations = convert_numpy_to_python(filtered_recommendations)
         
+        # Check if embedding weights are locked for this session
+        weights_locked = session_id in engine.session_embedding_weights
+        current_weights = None
+        if weights_locked:
+            clip_w, text_w = engine.session_embedding_weights[session_id]
+            current_weights = {
+                'clipSimilarityWeight': int(clip_w * 100),
+                'textSimilarityWeight': int(text_w * 100)
+            }
+        
         logger.info(f"✅ Generated {len(json_safe_recommendations)} filtered recommendations for session {session_id}")
         
         return jsonify({
@@ -332,7 +342,9 @@ def get_recommendations():
             'recommendations': json_safe_recommendations,
             'session_id': session_id,
             'count': len(json_safe_recommendations),
-            'filter_preferences': filter_preferences
+            'filter_preferences': filter_preferences,
+            'embedding_weights_locked': weights_locked,
+            'current_embedding_weights': current_weights
         })
         
     except Exception as e:
@@ -576,6 +588,60 @@ def get_debug_stats():
         
     except Exception as e:
         logger.error(f"❌ Error getting debug stats: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/session/<session_id>/status', methods=['GET'])
+def get_session_status(session_id):
+    """Get session status including embedding weights lock status."""
+    try:
+        if engine is None:
+            return jsonify({'error': 'Engine not initialized'}), 500
+        
+        # Check if session exists and get its status
+        session_exists = (
+            session_id in engine.session_liked_watches or 
+            session_id in engine.session_experts or 
+            session_id in engine.session_embedding_weights
+        )
+        
+        if not session_exists:
+            return jsonify({
+                'session_id': session_id,
+                'exists': False,
+                'embedding_weights_locked': False,
+                'current_embedding_weights': None,
+                'experts_count': 0,
+                'likes_count': 0,
+                'interaction_count': 0
+            })
+        
+        # Get session details
+        weights_locked = session_id in engine.session_embedding_weights
+        current_weights = None
+        if weights_locked:
+            clip_w, text_w = engine.session_embedding_weights[session_id]
+            current_weights = {
+                'clipSimilarityWeight': int(clip_w * 100),
+                'textSimilarityWeight': int(text_w * 100)
+            }
+        
+        experts_count = len(engine.session_experts.get(session_id, []))
+        likes_count = len(engine.session_liked_watches.get(session_id, []))
+        interaction_count = engine.session_interaction_counts.get(session_id, 0)
+        
+        return jsonify({
+            'session_id': session_id,
+            'exists': True,
+            'embedding_weights_locked': weights_locked,
+            'current_embedding_weights': current_weights,
+            'experts_count': experts_count,
+            'likes_count': likes_count,
+            'interaction_count': interaction_count,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error getting session status: {e}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
