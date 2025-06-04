@@ -3,12 +3,12 @@
   buildCommand = "cp requirements_simple.txt requirements.txt && pip install -r requirements.txt"
 
 [deploy]
-  startCommand = "cd watch_finder_v2/backend/api && python simple_app.py"
+  startCommand = "python api/simple_app.py"
   healthcheckPath = "/api/health"
   healthcheckTimeout = 300
   restartPolicyType = "ON_FAILURE"
 
 [env]
   ENVIRONMENT = "production"
-  PYTHONPATH = "/app/watch_finder_v2/backend"
+  PYTHONPATH = "/app"
   RAILWAY_URL = "https://web-production-36c3.up.railway.app" 
