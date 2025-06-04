@@ -1,0 +1,10 @@
+{
+  "apiUrl": "http://localhost:5001/api",
+  "fallbackUrls": [
+    "http://localhost:5001/api",
+    "http://127.0.0.1:5001/api",
+    "http://192.168.50.5:5001/api"
+  ],
+  "environment": "development",
+  "debugLogging": true
+} 
