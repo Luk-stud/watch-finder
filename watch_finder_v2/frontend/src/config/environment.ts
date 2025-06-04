@@ -84,7 +84,7 @@ const createEnvironmentConfig = (): EnvironmentConfig => {
     case 'production':
       return {
         ...baseConfig,
-        FALLBACK_URLS: [
+  FALLBACK_URLS: [
           'https://web-production-36c3.up.railway.app/api',
           // Add additional production fallback URLs if needed
         ],
@@ -99,9 +99,9 @@ const createEnvironmentConfig = (): EnvironmentConfig => {
     default:
       return {
         ...baseConfig,
-        FALLBACK_URLS: [
-          'http://localhost:5001/api',
-          'http://127.0.0.1:5001/api',
+  FALLBACK_URLS: [
+    'http://localhost:5001/api',
+    'http://127.0.0.1:5001/api',
           'http://0.0.0.0:5001/api'
         ],
         FEATURES: {

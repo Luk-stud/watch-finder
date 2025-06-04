@@ -1,0 +1,104 @@
+Visual Style-Focused Watch Descriptions (Sample)
+Generated from image analysis - brand-agnostic
+============================================================
+
+1. Aquatico Super Marine dive watch White dial Blue Bezel (SW 200-1)(Launch Special)
+   Image: ../production_scrape_20250601_175426/images/Aquatico_Super_Marine_dive_watch_White_dial_Blue_Bezel_PT5000_LeftHanded_main.jpg
+   Original text: N/A
+   Visual analysis: This watch exhibits a sporty and adventure-ready design with a robust stainless steel case and a bold blue unidirectional bezel. The white dial features a clean layout with simple, contrasting hour markers and hands, accented by a vibrant orange second hand for a touch of dynamism. The overall aesthetic is both functional and eye-catching, with a modern, professional character suitable for both everyday wear and adventurous pursuits.
+
+2. Aquatico Sea Star
+   Image: ../production_scrape_20250601_175426/images/Aquatico_Sea_Star_main.jpg
+   Original text: N/A
+   Visual analysis: This timepiece presents a rugged, adventure-ready aesthetic with a bronze case that exudes a vintage charm. The black dial is complemented by luminous markers and bold hands, enhancing readability and functionality in low-light conditions, characteristic of a diver's watch. The unidirectional rotating bezel and sturdy leather strap add to its robust, outdoor-ready character, while maintaining a clean and professional appearance.
+
+3. Anordain Model 2
+   Image: ../production_scrape_20250601_175426/images/Anordain_Model_2_main.jpg
+   Original text: N/A
+   Visual analysis: The watch features a modern yet rugged design, characterized by a polished stainless steel case with a unique, angular shape. Its dial is a distinctive mustard yellow, complemented by bold Arabic numerals and slender, pointed hands, adding a dynamic and adventurous personality. The clean, geometric layout and minimalistic aesthetic create a balance between simplicity and functionality, making it suitable for everyday exploration.
+
+4. Autodromo Prototipo
+   Image: ../production_scrape_20250601_175426/images/Autodromo_Prototipo_main.jpg
+   Original text: N/A
+   Visual analysis: This watch features a vintage-inspired, sporty design with a cushion-shaped stainless steel case and a tachymeter bezel. The dial is characterized by a clean, white surface with contrasting subdials and a bold red second hand, enhancing its dynamic look. The perforated brown leather strap adds a retro touch, complementing the overall rally chronograph aesthetic.
+
+5. Anordain Model 1
+   Image: ../production_scrape_20250601_175426/images/Anordain_Model_1_main.jpg
+   Original text: N/A
+   Visual analysis: This watch features an elegant and minimalist design with a refined aesthetic. The dial is a deep blue with simple Arabic numerals at key positions and slender hands, contributing to a clean and professional look. The stainless steel case is round and polished, enhancing the overall sophisticated and modern character of the timepiece.
+
+6. Anordain Model 1
+   Image: ../production_scrape_20250601_175426/images/Anordain_Model_1_main.jpg
+   Original text: N/A
+   Visual analysis: An elegant dress watch with a refined aesthetic featuring a polished stainless steel case and a deep blue dial. The dial is minimalist, with slender, stylized hands and clean Arabic numerals at 2, 4, 6, 8, 10, and 12 o'clock, lending a modern yet classic feel. The overall design is clean and sophisticated, emphasizing simplicity and elegance.
+
+7. Aquatico Sea Star V2 Blue Dial Pepsi Bezel Snnowflake Hands Watch (NH35)
+   Image: ../production_scrape_20250601_175426/images/Aquatico_Sea_Star_V2_Blue_Dial_Pepsi_Bezel_Snnowflake_Hands_Watch_NH35_main.jpg
+   Original text: N/A
+   Visual analysis: This watch showcases a bold, sporty design with a vibrant blue dial and a bi-color bezel in red and blue, suggesting a dynamic and adventurous aesthetic. The case is crafted in 316L stainless steel, enhancing its robust, professional feel. Luminous markers and broad hands enhance readability, while the date window adds a practical element, all contributing to a clean yet striking visual character.
+
+8. Autodromo Intereuropa
+   Image: ../production_scrape_20250601_175426/images/Autodromo_Intereuropa_main.jpg
+   Original text: N/A
+   Visual analysis: A vintage-inspired timepiece with an elegant and refined aesthetic, featuring a clean and minimalist dial layout. The round case is complemented by a smooth bezel and classic, slender hands, while the contrasting numerals on the outer track evoke a retro charm. The overall mood is sophisticated and nostalgic, with a focus on simplicity and timeless design.
+
+9. Boldr Expedition
+   Image: ../production_scrape_20250601_175426/images/Boldr_Expedition_main.jpg
+   Original text: N/A
+   Visual analysis: This watch exudes a rugged, adventure-ready aesthetic with a robust, angular case and a durable fabric strap. The dial features a military green color with large, easy-to-read white numerals and a mix of triangle and stick markers, enhancing its utilitarian style. The presence of a secondary crown and a date window adds complexity, while the overall design maintains a clean and functional character suitable for outdoor exploration.
+
+10. Aquatico Super Star Bronze Tritium Black Dial(SWISS MADE ETA2824-2) No Date
+   Image: ../production_scrape_20250601_175426/images/Aquatico_Super_Star_Bronze_Tritium_Blue_DialSWISS_MADE_ETA28242_No_Date_main.jpg
+   Original text: N/A
+   Visual analysis: This watch features a vintage-inspired design with a robust, adventure-ready aesthetic. The bronze case pairs with a rich blue dial and a matching blue unidirectional bezel, emphasizing a nautical theme. Bold, luminous markers and arrow-shaped hands enhance readability, while the brown leather strap adds a touch of classic elegance to the overall look.
+
+11. Autodromo Vallelunga
+   Image: ../production_scrape_20250601_175426/images/Autodromo_Vallelunga_main.jpg
+   Original text: N/A
+   Visual analysis: This timepiece showcases a modern and minimalist design with a sporty flair, characterized by a clean, white dial and subtle orange and black accents. The case is round with a smooth bezel, and the dial features a unique layout with linear markers and contrasting hands, adding a dynamic visual element. The overall mood is refined yet bold, with a focus on geometric precision and clarity.
+
+12. Aquatico Steel Man Green Dial Ceramic Bezel Watch (NH35)
+   Image: ../production_scrape_20250601_175426/images/Aquatico_Steel_Man_Green_Dial_Ceramic_Bezel_Watch_NH35_main.jpg
+   Original text: N/A
+   Visual analysis: The watch features a bold and sporty design with a square stainless steel case and a vibrant green dial, exuding an adventurous aesthetic. The unidirectional rotating bezel and prominent luminous markers emphasize functionality, while the large, arrow-shaped hands enhance readability. Its robust character and modern appeal are complemented by a durable strap, making it ideal for active wear.
+
+13. Aquatico Super Marine dive watch White dial Blue Bezel (PT5000)(Launch Special)
+   Image: ../production_scrape_20250601_175426/images/Aquatico_Super_Marine_dive_watch_White_dial_Blue_Bezel_PT5000Launch_Special_main.jpg
+   Original text: N/A
+   Visual analysis: The watch presents a sporty and adventure-ready aesthetic with its robust design and bold elements. It features a prominent unidirectional rotating bezel with clear numerals and markings, enhancing its functionality for diving. The clean white dial, accented by strong, luminous hands and markers, provides high contrast for optimal readability, while the sturdy stainless steel case and blue strap add a touch of modernity and ruggedness.
+
+14. Autodromo Group B
+   Image: ../production_scrape_20250601_175426/images/Autodromo_Group_B_main.jpg
+   Original text: N/A
+   Visual analysis: This watch showcases a modern and minimalist design with a playful aesthetic. The dial features a striking blue color with vibrant orange markers, creating a bold contrast. The case is sleek and metallic, complemented by a smooth bezel and integrated bracelet, giving the piece a clean and geometric character.
+
+15. Aevig Thule
+   Image: ../production_scrape_20250601_175426/images/Aevig_Thule_main.jpg
+   Original text: N/A
+   Visual analysis: The watch has a modern, robust design with a distinctive geometric case shape, reflecting an adventure-ready aesthetic. The brown dial features bold, luminous markers and hands, with a 24-hour GMT scale for added functionality. The titanium case and bracelet enhance its industrial and durable character, offering a sleek yet rugged overall mood.
+
+16. Anordain Model 2
+   Image: ../production_scrape_20250601_175426/images/Anordain_Model_2_main.jpg
+   Original text: N/A
+   Visual analysis: The watch features a minimalist and modern design with a clean, circular stainless steel case that complements its simple aesthetic. The dial is a muted yellow with bold, easy-to-read Arabic numerals and slender, pointed hands, creating a refined yet casual look. Overall, the watch exudes a straightforward and functional character, suitable for everyday wear.
+
+17. Boldr Globetrotter
+   Image: ../production_scrape_20250601_175426/images/Boldr_Globetrotter_main.jpg
+   Original text: N/A
+   Visual analysis: This timepiece exhibits a sporty and adventure-ready design, characterized by its robust stainless steel case and prominent unidirectional rotating bezel with a two-tone color scheme. The dial is clean and functional, featuring luminous markers and bold hands for enhanced readability. The overall aesthetic is modern and professional, with a focus on utility and versatility.
+
+18. Anordain Model 1
+   Image: ../production_scrape_20250601_175426/images/Anordain_Model_1_main.jpg
+   Original text: N/A
+   Visual analysis: An elegant dress watch with a modern aesthetic, featuring a polished stainless steel case that complements the rich teal dial. The dial showcases a minimalist layout with sleek, elongated hands and Arabic numerals, providing a refined and understated look. The overall design exudes a sophisticated and professional mood, highlighted by its clean lines and balanced proportions.
+
+19. Aquatico Big Pilot
+   Image: ../production_scrape_20250601_175426/images/Aquatico_Big_Pilot_main.jpg
+   Original text: N/A
+   Visual analysis: This timepiece presents a vintage pilot watch aesthetic with a robust and adventure-ready personality. The bronze case and bold, luminous numerals enhance its rugged appeal, complemented by a clear, easy-to-read blue dial with a subdial for added functionality. The brown leather strap with contrast stitching adds a touch of classic refinement, while the large crown and geometric elements give it a functional, industrial character.
+
+20. Anordain Model 1
+   Image: ../production_scrape_20250601_175426/images/Anordain_Model_1_main.jpg
+   Original text: N/A
+   Visual analysis: The watch exhibits an elegant and refined design, characterized by a sleek 316L stainless steel case and a deep blue dial. Its minimalist aesthetic is enhanced by slender, elongated hands and simple numeric markers, conveying a clean and professional mood. The absence of a bezel emphasizes the dial's prominence, while the leather strap adds a touch of classic sophistication.
+

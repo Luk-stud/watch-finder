@@ -384,8 +384,8 @@ export class ApiService {
         body: JSON.stringify({
           session_id: this.sessionId
         })
-      });
-      
+    });
+
       // Update session ID from response
       if (sessionData.session_id) {
         this.sessionId = sessionData.session_id;
@@ -425,7 +425,7 @@ export class ApiService {
     if (filterPreferences) {
       requestBody.filter_preferences = filterPreferences;
     }
-    
+
     return this.request<RecommendationsResponse>('/recommendations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -446,7 +446,7 @@ export class ApiService {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         session_id: this.sessionId,
         watch_id: watchId, 
         feedback: action 
