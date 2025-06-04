@@ -175,14 +175,16 @@ class ExpertLinUCB:
         # Create fixed-size context
         combined_context = np.zeros(self.dim)
         
+        # Split dimension evenly between centroid and embedding
+        half_dim = self.dim // 2
+        
         # Fill first half with expert centroid (truncated/padded as needed)
-        centroid_size = min(len(centroid), self.dim // 2)
+        centroid_size = min(len(centroid), half_dim)
         combined_context[:centroid_size] = centroid[:centroid_size]
         
         # Fill second half with watch embedding (truncated/padded as needed)  
-        embedding_size = min(len(watch_embedding), self.dim - self.dim // 2)
-        embedding_start = self.dim // 2
-        combined_context[embedding_start:embedding_start + embedding_size] = watch_embedding[:embedding_size]
+        embedding_size = min(len(watch_embedding), self.dim - half_dim)
+        combined_context[half_dim:half_dim + embedding_size] = watch_embedding[:embedding_size]
         
         # Normalize to prevent magnitude issues
         norm = np.linalg.norm(combined_context)
@@ -237,10 +239,6 @@ class DynamicMultiExpertLinUCBEngine:
         self.session_experts: Dict[str, List[int]] = {}  # session_id -> [expert_ids] 
         self.session_interaction_counts: Dict[str, int] = {}  # session_id -> interaction count
         
-        # MISSING ATTRIBUTES - FIX CRITICAL BUG
-        self.global_liked_watches: List[int] = []  # Global tracking of all liked watches
-        self.experts_created_from_likes: int = 0   # Counter for experts created from likes
-        
         # Watch data
         self.watch_data: Dict[int, Dict[str, Any]] = {}
         self.watch_embeddings: Dict[int, np.ndarray] = {}  # watch_id -> reduced embedding (dim size)
@@ -288,6 +286,25 @@ class DynamicMultiExpertLinUCBEngine:
             
             logger.info(f"✅ Loaded {len(metadata_list)} watches, text embeddings shape {text_embeddings_array.shape}, CLIP embeddings shape {clip_embeddings_array.shape}")
             
+            # Store raw embeddings for PCA fitting
+            self._raw_embeddings = []
+            valid_raw_embeddings = []
+            for idx, watch_dict in enumerate(metadata_list):
+                if 'text_embedding' in watch_dict and isinstance(watch_dict['text_embedding'], np.ndarray):
+                    raw_embedding = watch_dict['text_embedding']
+                elif idx < len(text_embeddings_array):
+                    raw_embedding = text_embeddings_array[idx]
+                else:
+                    continue
+                    
+                if len(raw_embedding) > self.dim:  # Only collect embeddings that need reduction
+                    valid_raw_embeddings.append(raw_embedding)
+            
+            # Store raw embeddings for PCA fitting
+            if len(valid_raw_embeddings) > 0:
+                self._raw_embeddings = valid_raw_embeddings[:min(1000, len(valid_raw_embeddings))]  # Limit for memory
+                logger.info(f"📊 Collected {len(self._raw_embeddings)} raw embeddings for PCA fitting")
+            
             # Convert metadata list to dictionary and store embeddings
             for idx, watch_dict in enumerate(metadata_list):
                 try:
@@ -334,121 +351,6 @@ class DynamicMultiExpertLinUCBEngine:
         except Exception as e:
             logger.error(f"❌ Failed to load data: {e}")
             self._create_fallback_data()
-    
-    def _initialize_hybrid_experts(self) -> None:
-        """Initialize experts using hybrid approach: pre-clustering + unassigned exploration."""
-        logger.info(f"🎯 Initializing HYBRID multi-expert system...")
-        
-        if len(self.watch_embeddings) == 0:
-            logger.error("No watch embeddings available for clustering")
-            return
-        
-        # Step 1: Prepare embeddings for clustering
-        watch_ids = list(self.watch_embeddings.keys())
-        embeddings_matrix = np.array([self.watch_embeddings[wid] for wid in watch_ids])
-        
-        logger.info(f"📊 Clustering {len(watch_ids)} watches into {self.initial_experts} initial experts...")
-        
-        # Step 2: Standardize and cluster
-        try:
-            scaler = StandardScaler()
-            embeddings_scaled = scaler.fit_transform(embeddings_matrix)
-            
-            # Perform K-means clustering
-            kmeans = KMeans(n_clusters=self.initial_experts, random_state=42, n_init=10)
-            cluster_labels = kmeans.fit_predict(embeddings_scaled)
-            
-            logger.info(f"✅ K-means clustering completed")
-            
-        except Exception as e:
-            logger.error(f"Clustering failed: {e}, falling back to random assignment")
-            cluster_labels = np.random.randint(0, self.initial_experts, len(watch_ids))
-        
-        # Step 3: Create experts and assign watches
-        cluster_assignments = {}
-        for i in range(self.initial_experts):
-            cluster_assignments[i] = []
-        
-        # Group watches by cluster
-        for idx, cluster_id in enumerate(cluster_labels):
-            cluster_assignments[cluster_id].append(watch_ids[idx])
-        
-        # Step 4: Create experts and assign clustered watches
-        total_assigned = 0
-        for cluster_id in range(self.initial_experts):
-            expert_id = self._create_new_expert()
-            cluster_watches = cluster_assignments[cluster_id]
-            
-            # Calculate how many to assign (leave some unassigned for exploration)
-            target_assigned = int(len(cluster_watches) * (1 - self.unassigned_ratio))
-            assigned_watches = cluster_watches[:target_assigned]
-            unassigned_from_cluster = cluster_watches[target_assigned:]
-            
-            # Assign watches to expert
-            for watch_id in assigned_watches:
-                self._add_watch_to_expert(expert_id, watch_id)
-                total_assigned += 1
-            
-            # Keep remaining unassigned for exploration
-            for watch_id in unassigned_from_cluster:
-                self.unassigned_watches.add(watch_id)
-            
-            logger.info(f"✅ Expert {expert_id} (Cluster {cluster_id}): {len(assigned_watches)} watches assigned, {len(unassigned_from_cluster)} kept unassigned")
-            
-            # Log cluster characteristics
-            if assigned_watches:
-                sample_brands = []
-                for wid in assigned_watches[:5]:  # Sample first 5
-                    if wid < len(self.watch_data):
-                        brand = self.watch_data.get(wid, {}).get('brand', 'Unknown')
-                        sample_brands.append(brand)
-                
-                logger.info(f"    Sample brands: {sample_brands}")
-        
-        # Step 5: Summary
-        total_watches = len(self.watch_data)
-        assigned_ratio = total_assigned / total_watches
-        unassigned_count = len(self.unassigned_watches)
-        
-        logger.info(f"🎉 HYBRID INITIALIZATION COMPLETE:")
-        logger.info(f"   📊 Total watches: {total_watches}")
-        logger.info(f"   ✅ Assigned to experts: {total_assigned} ({assigned_ratio*100:.1f}%)")
-        logger.info(f"   🔍 Unassigned for exploration: {unassigned_count} ({unassigned_count/total_watches*100:.1f}%)")
-        logger.info(f"   👥 Initial experts: {len(self.experts)}")
-        logger.info(f"   📈 Can grow to: {self.max_experts} experts")
-        
-        return
-    
-    def _initialize_initial_experts(self) -> None:
-        """Initialize starting experts with small samples, leaving most watches unassigned."""
-        logger.info(f"🎯 Initializing {self.initial_experts} starting experts...")
-        
-        # Get a small random sample of watches for each initial expert
-        available_watches = list(self.unassigned_watches)
-        
-        if len(available_watches) == 0:
-            logger.error("No watches available for initialization")
-            return
-        
-        # Start with SMALL expert sizes for speed - only assign a few watches per expert
-        watches_per_expert = self.min_expert_size  # Use minimum size (3 watches per expert)
-        
-        for i in range(self.initial_experts):
-            expert_id = self._create_new_expert()
-            
-            # Assign only a small sample to this expert
-            start_idx = i * watches_per_expert
-            end_idx = min(start_idx + watches_per_expert, len(available_watches))
-            
-            expert_watches = available_watches[start_idx:end_idx]
-            
-            for watch_id in expert_watches:
-                self._add_watch_to_expert(expert_id, watch_id)
-                self.unassigned_watches.discard(watch_id)
-            
-            logger.info(f"✅ Expert {expert_id} initialized with {len(expert_watches)} watches")
-        
-        logger.info(f"🚀 Dynamic expert system ready! {len(self.unassigned_watches)} watches unassigned (fast mode)")
     
     def _create_new_expert(self) -> int:
         """Create a new expert and return its ID."""
@@ -565,9 +467,13 @@ class DynamicMultiExpertLinUCBEngine:
         elif exclude_ids is None:
             exclude_ids = set()
         
-        # Extract similarity weights from context (first two dimensions)
-        clip_weight = context[0] if len(context) > 0 else 0.5
-        text_weight = context[1] if len(context) > 1 else 0.5
+        # Handle context vectors of different sizes
+        if len(context) >= 2:
+            clip_weight = context[0]
+            text_weight = context[1]
+        else:
+            # Fallback for empty or too-small context
+            clip_weight = text_weight = 0.5
         
         # Validate and normalize weights
         clip_weight = max(0.0, min(1.0, clip_weight))  # Bound between 0 and 1
@@ -597,6 +503,7 @@ class DynamicMultiExpertLinUCBEngine:
         
         session_experts = self.session_experts.get(session_id, [])
         session_num = self.session_interaction_counts.get(session_id, 0) + 1
+        self.session_interaction_counts[session_id] = session_num  # FIXED: Actually update the counter
         
         if not session_experts:
             # Random exploration
@@ -885,6 +792,12 @@ class DynamicMultiExpertLinUCBEngine:
             
         watch_embedding = self.watch_embeddings[watch_id]
         
+        # Extend context to full dimension if needed (for LinUCB algorithm)
+        if len(context) < self.dim:
+            full_context = np.zeros(self.dim)
+            full_context[:len(context)] = context
+            context = full_context
+        
         # Track likes
         if reward > 0:  # User liked the watch
             if watch_id not in self.session_liked_watches[session_id]:
@@ -968,6 +881,11 @@ class DynamicMultiExpertLinUCBEngine:
     
     def _reduce_features(self, embedding: np.ndarray) -> np.ndarray:
         """Reduce embedding dimensionality using PCA - OPTIMIZED FOR INFORMATION RETENTION."""
+        # Handle empty or invalid embeddings
+        if embedding is None or len(embedding) == 0:
+            logger.warning("Empty embedding provided, returning zero vector")
+            return np.zeros(self.dim)
+            
         if len(embedding) <= self.dim:
             result = np.zeros(self.dim)
             result[:len(embedding)] = embedding
@@ -975,27 +893,24 @@ class DynamicMultiExpertLinUCBEngine:
         else:
             # Initialize PCA if not done yet
             if not hasattr(self, '_pca_reducer'):
-                # Load all valid (non-empty) embeddings for PCA fitting
-                valid_embeddings = []
-                for emb in self.watch_embeddings.values():
-                    if emb is not None and len(emb) > 0:
-                        valid_embeddings.append(emb)
+                logger.info(f"Initializing PCA reducer for {self.dim}D target dimension")
                 
-                if len(valid_embeddings) == 0:
-                    logger.warning("No valid embeddings for PCA, using truncation")
+                # FIXED: Fit PCA on RAW embeddings during data loading
+                if hasattr(self, '_raw_embeddings') and len(self._raw_embeddings) > 0:
+                    embeddings_matrix = np.array(self._raw_embeddings)
+                    
+                    # Standardize and fit PCA
+                    self._scaler = StandardScaler()
+                    embeddings_scaled = self._scaler.fit_transform(embeddings_matrix)
+                    
+                    self._pca_reducer = PCA(n_components=self.dim)
+                    self._pca_reducer.fit(embeddings_scaled)
+                    
+                    logger.info(f"PCA reducer initialized: {self.dim}D retains "
+                              f"{np.sum(self._pca_reducer.explained_variance_ratio_)*100:.1f}% variance")
+                else:
+                    logger.warning("No raw embeddings available for PCA, using truncation")
                     return embedding[:self.dim] if len(embedding) >= self.dim else np.pad(embedding, (0, self.dim - len(embedding)))
-                
-                embeddings_matrix = np.array(valid_embeddings)
-                
-                # Standardize and fit PCA
-                self._scaler = StandardScaler()
-                embeddings_scaled = self._scaler.fit_transform(embeddings_matrix)
-                
-                self._pca_reducer = PCA(n_components=self.dim)
-                self._pca_reducer.fit(embeddings_scaled)
-                
-                logger.info(f"PCA reducer initialized: {self.dim}D retains "
-                          f"{np.sum(self._pca_reducer.explained_variance_ratio_)*100:.1f}% variance")
             
             try:
                 # Apply standardization and PCA reduction
@@ -1053,121 +968,6 @@ class DynamicMultiExpertLinUCBEngine:
         """Get detailed information about a specific watch."""
         return self.watch_data.get(watch_id)
 
-    def _initialize_like_driven(self) -> None:
-        """Initialize like-driven clustering system with pure exploration."""
-        logger.info("🎯 LIKE-DRIVEN CLUSTERING INITIALIZATION:")
-        logger.info(f"   📊 Total watches: {len(self.watch_data)}")
-        logger.info(f"   🔍 All watches available for exploration: {len(self.watch_data)}")
-        logger.info(f"   👥 Starting experts: 0 (will create from likes)")
-        logger.info(f"   📈 Can grow to: {self.max_experts} experts")
-        logger.info(f"   🎯 Need {self.min_likes_for_first_expert} likes for first expert")
-        logger.info(f"   🎯 Need {self.min_likes_for_new_expert} likes for additional experts")
-        
-        # All watches start unassigned for pure exploration
-        self.unassigned_watches = set(self.watch_data.keys())
-        
-        logger.info("🚀 PURE EXPLORATION MODE ACTIVATED!")
-        logger.info("   System will recommend diverse watches until likes are collected")
-    
-    def _cluster_liked_watches(self, liked_watches: List[int]) -> List[List[int]]:
-        """Cluster liked watches based on embedding similarity."""
-        if len(liked_watches) < 2:
-            return [liked_watches]
-        
-        # Get embeddings for liked watches
-        embeddings = []
-        valid_watches = []
-        for watch_id in liked_watches:
-            if watch_id in self.watch_embeddings:
-                embeddings.append(self.watch_embeddings[watch_id])
-                valid_watches.append(watch_id)
-        
-        if len(embeddings) < 2:
-            return [valid_watches]
-        
-        embeddings = np.array(embeddings)
-        
-        # Use agglomerative clustering for preference groups
-        try:
-            from sklearn.cluster import AgglomerativeClustering
-            from sklearn.metrics import pairwise_distances
-            
-            # Calculate pairwise cosine distances
-            distances = pairwise_distances(embeddings, metric='cosine')
-            
-            # Use distance threshold to determine clusters
-            clustering = AgglomerativeClustering(
-                n_clusters=None,
-                distance_threshold=1 - self.like_clustering_threshold,  # Convert similarity to distance
-                metric='precomputed',
-                linkage='average'
-            )
-            
-            cluster_labels = clustering.fit_predict(distances)
-            
-            # Group watches by cluster
-            clusters = {}
-            for i, label in enumerate(cluster_labels):
-                if label not in clusters:
-                    clusters[label] = []
-                clusters[label].append(valid_watches[i])
-            
-            # Return clusters sorted by size (largest first)
-            return sorted(clusters.values(), key=len, reverse=True)
-            
-        except Exception as e:
-            logger.warning(f"Clustering failed: {e}, treating all likes as one cluster")
-            return [valid_watches]
-    
-    def _create_expert_from_likes(self, liked_watches: List[int], cluster_id: int = 0) -> int:
-        """Create a new expert from a cluster of liked watches."""
-        expert_id = self._create_new_expert()
-        
-        # Add liked watches to the expert
-        for watch_id in liked_watches:
-            if watch_id in self.watch_embeddings:
-                self._add_watch_to_expert(expert_id, watch_id)
-                self.unassigned_watches.discard(watch_id)
-        
-        # Find and assign SELECTIVELY similar watches from unassigned pool
-        # Use a HIGHER threshold and LIMIT the expert size to maintain specialization
-        MAX_EXPERT_SIZE = 50  # Limit expert size to maintain focus
-        HIGH_SIMILARITY_THRESHOLD = 0.75  # Higher threshold for better specialization
-        
-        assigned_similar = 0
-        potential_assignments = []
-        
-        if expert_id in self.expert_centroids:
-            for watch_id in list(self.unassigned_watches):
-                watch_embedding = self.watch_embeddings.get(watch_id)
-                if watch_embedding is not None:
-                    similarity = self._cosine_similarity(
-                        self.expert_centroids[expert_id],
-                        watch_embedding
-                    )
-                    if similarity >= HIGH_SIMILARITY_THRESHOLD:
-                        potential_assignments.append((watch_id, similarity))
-            
-            # Sort by similarity and take only the best matches up to the limit
-            potential_assignments.sort(key=lambda x: x[1], reverse=True)
-            max_additional = MAX_EXPERT_SIZE - len(liked_watches)
-            
-            for watch_id, similarity in potential_assignments[:max_additional]:
-                self._add_watch_to_expert(expert_id, watch_id)
-                self.unassigned_watches.discard(watch_id)
-                assigned_similar += 1
-        
-        # Calculate metrics for logging
-        total_expert_watches = len(self.experts[expert_id].liked_watches)
-        remaining_unassigned = len(self.unassigned_watches)
-        
-        logger.info(f"🎯 Created FOCUSED preference expert {expert_id} from {len(liked_watches)} likes (cluster {cluster_id})")
-        logger.info(f"   📌 Assigned {assigned_similar} highly similar watches (similarity > {HIGH_SIMILARITY_THRESHOLD})")
-        logger.info(f"   📊 Expert has {total_expert_watches} watches (max {MAX_EXPERT_SIZE})")
-        logger.info(f"   🔍 {remaining_unassigned} watches remain unassigned for exploration")
-        
-        return expert_id
-    
     def _format_recommendation(self, watch_id: int, confidence: float, recommendation_type: str) -> Dict[str, Any]:
         """Format a recommendation as a dictionary."""
         if watch_id in self.watch_data:

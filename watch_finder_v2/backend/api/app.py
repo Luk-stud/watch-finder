@@ -259,12 +259,9 @@ def get_recommendations():
         clip_weight = filter_preferences.get('clipSimilarityWeight', 50) / 100.0
         text_weight = filter_preferences.get('textSimilarityWeight', 50) / 100.0
         
-        # Create context vector that includes filter preferences
-        context = np.zeros(engine.dim)
-        
-        # Encode filter preferences into context (first few dimensions)
-        context[0] = clip_weight
-        context[1] = text_weight
+        # Create minimal context vector - only include the weights we need
+        # LinUCB engine only uses first 2 dimensions anyway
+        context = np.array([clip_weight, text_weight])
         
         # Get raw recommendations from engine
         recommendations = engine.get_recommendations(
@@ -513,8 +510,8 @@ def submit_feedback():
         # Convert feedback to reward
         reward = 1.0 if feedback == 'like' else 0.0
         
-        # Create a dummy context for now
-        context = np.zeros(engine.dim)
+        # Create minimal context for update (engine extends as needed)
+        context = np.array([0.5, 0.5])  # Default equal weights
         
         # Update the engine
         engine.update(
