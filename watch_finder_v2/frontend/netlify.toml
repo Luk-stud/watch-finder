@@ -4,7 +4,7 @@
 
 [build.environment]
   NODE_VERSION = "18"
-  VITE_API_URL = "https://web-production-a75cb.up.railway.app/api"
+  VITE_API_URL = "https://web-production-36c3.up.railway.app/api"
 
 # Handle Vite/React SPA routing
 [[redirects]]
