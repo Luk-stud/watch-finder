@@ -60,8 +60,8 @@ const getApiBaseUrl = (): string => {
   
   switch (environment) {
     case 'production':
-      // Railway backend URL - replace with your actual Railway app URL
-      return 'https://your-railway-app.railway.app/api';
+      // Railway backend URL - using actual deployment URL
+      return 'https://web-production-36c3.up.railway.app/api';
     
     case 'development':
     default:
@@ -85,7 +85,7 @@ const createEnvironmentConfig = (): EnvironmentConfig => {
       return {
         ...baseConfig,
         FALLBACK_URLS: [
-          'https://your-railway-app.railway.app/api',
+          'https://web-production-36c3.up.railway.app/api',
           // Add additional production fallback URLs if needed
         ],
         FEATURES: {

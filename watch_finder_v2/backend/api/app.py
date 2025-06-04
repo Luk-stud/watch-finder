@@ -39,11 +39,11 @@ app = Flask(__name__)
 ENVIRONMENT = os.getenv('ENVIRONMENT', 'development')
 if ENVIRONMENT == 'production':
     # Production CORS - restrict to your Netlify domain
-    NETLIFY_DOMAIN = os.getenv('NETLIFY_DOMAIN', 'your-app-name.netlify.app')
+    NETLIFY_DOMAIN = os.getenv('NETLIFY_DOMAIN', 'your-netlify-app.netlify.app')
     CORS(app, origins=[
         f"https://{NETLIFY_DOMAIN}",
         f"https://www.{NETLIFY_DOMAIN}",
-        "https://deploy-preview-*--your-app-name.netlify.app"  # Preview deployments
+        "https://deploy-preview-*--your-netlify-app.netlify.app"  # Preview deployments
     ])
     logger.info(f"🔒 Production CORS enabled for: {NETLIFY_DOMAIN}")
 else:

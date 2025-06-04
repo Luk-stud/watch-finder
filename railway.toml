@@ -10,4 +10,5 @@
 
 [env]
   ENVIRONMENT = "production"
-  PYTHONPATH = "/app/watch_finder_v2/backend" 
+  PYTHONPATH = "/app/watch_finder_v2/backend"
+  RAILWAY_URL = "https://web-production-36c3.up.railway.app" 
