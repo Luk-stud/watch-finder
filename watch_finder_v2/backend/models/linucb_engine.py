@@ -325,10 +325,10 @@ class DynamicMultiExpertLinUCBEngine:
                     # Store text embedding with proper dimension reduction
                     if 'text_embedding' in watch_dict and isinstance(watch_dict['text_embedding'], np.ndarray):
                         raw_embedding = watch_dict['text_embedding']
-                        self.watch_embeddings[watch_id] = self._reduce_features(raw_embedding)
+                        self.watch_embeddings[watch_id] = self._reduce_features(raw_embedding, target_dim=self.dim)
                     elif watch_id < len(text_embeddings_array):
                         raw_embedding = text_embeddings_array[watch_id]
-                        self.watch_embeddings[watch_id] = self._reduce_features(raw_embedding)
+                        self.watch_embeddings[watch_id] = self._reduce_features(raw_embedding, target_dim=self.dim)
                     
                     # Store CLIP embedding separately (keep original size for weighted combination)
                     if watch_id < len(clip_embeddings_array):
@@ -372,7 +372,6 @@ class DynamicMultiExpertLinUCBEngine:
         # Get watch embedding and features
         if watch_id in self.watch_embeddings:
             embedding = self.watch_embeddings[watch_id]
-            features = self._reduce_features(embedding)
             expert.add_liked_watch(watch_id, embedding)
             
             # Update expert centroid
@@ -618,51 +617,45 @@ class DynamicMultiExpertLinUCBEngine:
     
     def _create_weighted_embedding(self, text_embedding: np.ndarray, clip_embedding: Optional[np.ndarray], 
                                  text_weight: float, clip_weight: float) -> np.ndarray:
-        """Create a weighted combination of text and CLIP embeddings."""
+        """Create a concatenated combination of text and CLIP embeddings."""
         # Ensure text embedding is reduced to target dimension
-        if len(text_embedding) != self.dim:
-            text_reduced = self._reduce_features(text_embedding)
+        if len(text_embedding) != self.dim // 2:  # Half dimension for text
+            text_reduced = self._reduce_features(text_embedding, target_dim=self.dim // 2)
         else:
             text_reduced = text_embedding
         
         if clip_embedding is None:
-            # If no CLIP embedding, return reduced text embedding
-            return text_reduced / (np.linalg.norm(text_reduced) + 1e-8)
+            # If no CLIP embedding, pad with zeros for second half
+            clip_reduced = np.zeros(self.dim // 2)
+        else:
+            # Reduce CLIP embedding to half dimension
+            clip_reduced = self._reduce_clip_embedding(clip_embedding, target_dim=self.dim // 2)
         
-        # Handle pure visual mode (clip_weight=1.0, text_weight=0.0)
-        if text_weight == 0.0 and clip_weight > 0.0:
-            # Reduce CLIP embedding to target dimension
-            clip_reduced = self._reduce_clip_embedding(clip_embedding)
-            return clip_reduced / (np.linalg.norm(clip_reduced) + 1e-8)
-        
-        # Handle pure text mode (text_weight=1.0, clip_weight=0.0)
-        if clip_weight == 0.0 and text_weight > 0.0:
-            return text_reduced / (np.linalg.norm(text_reduced) + 1e-8)
-        
-        # Handle mixed mode - create weighted combination
+        # Normalize both halves independently
         text_norm = text_reduced / (np.linalg.norm(text_reduced) + 1e-8)
-        
-        # Reduce CLIP embedding to target dimension
-        clip_reduced = self._reduce_clip_embedding(clip_embedding)
         clip_norm = clip_reduced / (np.linalg.norm(clip_reduced) + 1e-8)
         
-        # Create weighted combination
-        weighted_embedding = text_weight * text_norm + clip_weight * clip_norm
+        # Apply user weights to each modality
+        text_weighted = text_weight * text_norm
+        clip_weighted = clip_weight * clip_norm
         
-        # Renormalize the result
-        return weighted_embedding / (np.linalg.norm(weighted_embedding) + 1e-8)
+        # CONCATENATE the two modalities
+        concatenated_embedding = np.concatenate([text_weighted, clip_weighted])
+        
+        # Final normalization of the full vector
+        return concatenated_embedding / (np.linalg.norm(concatenated_embedding) + 1e-8)
     
-    def _reduce_clip_embedding(self, clip_embedding: np.ndarray) -> np.ndarray:
+    def _reduce_clip_embedding(self, clip_embedding: np.ndarray, target_dim: int) -> np.ndarray:
         """Reduce CLIP embedding to target dimension."""
-        if len(clip_embedding) == self.dim:
+        if len(clip_embedding) == target_dim:
             return clip_embedding
-        elif len(clip_embedding) > self.dim:
+        elif len(clip_embedding) > target_dim:
             # Use every nth element for better representation
-            indices = np.linspace(0, len(clip_embedding) - 1, self.dim).astype(int)
+            indices = np.linspace(0, len(clip_embedding) - 1, target_dim).astype(int)
             return clip_embedding[indices]
         else:
             # Pad with zeros or wrap
-            return np.pad(clip_embedding, (0, self.dim - len(clip_embedding)), mode='constant')
+            return np.pad(clip_embedding, (0, target_dim - len(clip_embedding)), mode='constant')
     
     def _apply_diversity_filter(self, candidate_recommendations: List[Tuple[int, float]], 
                                used_brands: Set[str], max_count: int) -> List[Tuple[int, float]]:
@@ -879,21 +872,21 @@ class DynamicMultiExpertLinUCBEngine:
         # Log current session state
         logger.info(f"📊 Session {session_id} status: {len(self.session_experts[session_id])} experts, {len(self.session_liked_watches[session_id])} likes")
     
-    def _reduce_features(self, embedding: np.ndarray) -> np.ndarray:
+    def _reduce_features(self, embedding: np.ndarray, target_dim: int) -> np.ndarray:
         """Reduce embedding dimensionality using PCA - OPTIMIZED FOR INFORMATION RETENTION."""
         # Handle empty or invalid embeddings
         if embedding is None or len(embedding) == 0:
             logger.warning("Empty embedding provided, returning zero vector")
-            return np.zeros(self.dim)
+            return np.zeros(target_dim)
             
-        if len(embedding) <= self.dim:
-            result = np.zeros(self.dim)
+        if len(embedding) <= target_dim:
+            result = np.zeros(target_dim)
             result[:len(embedding)] = embedding
             return result
         else:
             # Initialize PCA if not done yet
             if not hasattr(self, '_pca_reducer'):
-                logger.info(f"Initializing PCA reducer for {self.dim}D target dimension")
+                logger.info(f"Initializing PCA reducer for {target_dim}D target dimension")
                 
                 # FIXED: Fit PCA on RAW embeddings during data loading
                 if hasattr(self, '_raw_embeddings') and len(self._raw_embeddings) > 0:
@@ -903,14 +896,14 @@ class DynamicMultiExpertLinUCBEngine:
                     self._scaler = StandardScaler()
                     embeddings_scaled = self._scaler.fit_transform(embeddings_matrix)
                     
-                    self._pca_reducer = PCA(n_components=self.dim)
+                    self._pca_reducer = PCA(n_components=target_dim)
                     self._pca_reducer.fit(embeddings_scaled)
                     
-                    logger.info(f"PCA reducer initialized: {self.dim}D retains "
+                    logger.info(f"PCA reducer initialized: {target_dim}D retains "
                               f"{np.sum(self._pca_reducer.explained_variance_ratio_)*100:.1f}% variance")
                 else:
                     logger.warning("No raw embeddings available for PCA, using truncation")
-                    return embedding[:self.dim] if len(embedding) >= self.dim else np.pad(embedding, (0, self.dim - len(embedding)))
+                    return embedding[:target_dim] if len(embedding) >= target_dim else np.pad(embedding, (0, target_dim - len(embedding)))
             
             try:
                 # Apply standardization and PCA reduction
@@ -919,7 +912,7 @@ class DynamicMultiExpertLinUCBEngine:
                 return reduced.flatten()
             except Exception as e:
                 logger.warning(f"PCA reduction failed: {e}, using truncation")
-                return embedding[:self.dim] if len(embedding) >= self.dim else np.pad(embedding, (0, self.dim - len(embedding)))
+                return embedding[:target_dim] if len(embedding) >= target_dim else np.pad(embedding, (0, target_dim - len(embedding)))
     
     def _create_fallback_data(self) -> None:
         """Create minimal fallback data if loading fails."""

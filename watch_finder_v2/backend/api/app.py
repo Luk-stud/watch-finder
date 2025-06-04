@@ -72,7 +72,7 @@ def initialize_engine():
         logger.info(f"Initializing engine with data directory: {data_dir}")
         
         engine = DynamicMultiExpertLinUCBEngine(
-            dim=50,
+            dim=100,  # CONCATENATION: 50D text + 50D visual = 100D total
             alpha=0.15,
             batch_size=5,
             max_experts=6,
