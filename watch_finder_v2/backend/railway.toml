@@ -3,7 +3,7 @@
   buildCommand = "pip install -r requirements.txt"
 
 [deploy]
-  startCommand = "api/production_linucb_app.py"
+  startCommand = "python api/production_linucb_app.py"
   healthcheckPath = "/api/health"
   healthcheckTimeout = 300
   restartPolicyType = "ON_FAILURE"
@@ -11,4 +11,4 @@
 [env]
   ENVIRONMENT = "production"
   PYTHONPATH = "/app"
-  RAILWAY_URL = "https://web-production-36c3.up.railway.app" 
+  RAILWAY_URL = "https://web-production-36c3.up.railway.app"
