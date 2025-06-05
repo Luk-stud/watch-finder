@@ -446,6 +446,11 @@ class OptimizedLinUCBEngine:
         # Sort all scores from all experts
         all_scores.sort(key=lambda x: x[1], reverse=True)
         
+        # Debug: Log expert ID mapping for session
+        if session_experts:
+            expert_mapping = {expert_id: i+1 for i, expert_id in enumerate(session_experts)}
+            logger.debug(f"Session {session_id} expert mapping: {expert_mapping}")
+        
         # Take top scores while avoiding duplicates
         seen_watches = set()
         final_recommendations = []
@@ -453,8 +458,10 @@ class OptimizedLinUCBEngine:
         for watch_id, score, expert_id in all_scores:
             if watch_id not in seen_watches and len(final_recommendations) < self.batch_size:
                 seen_watches.add(watch_id)
+                # Convert global expert ID to session-specific expert number (1-6)
+                session_expert_number = session_experts.index(expert_id) + 1
                 final_recommendations.append(
-                    self._format_recommendation(watch_id, score, f"expert_{expert_id}")
+                    self._format_recommendation(watch_id, score, f"expert_{session_expert_number}")
                 )
         
         # Fill remaining slots with random recommendations if needed

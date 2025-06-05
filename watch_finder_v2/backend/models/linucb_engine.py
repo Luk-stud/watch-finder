@@ -560,7 +560,7 @@ class DynamicMultiExpertLinUCBEngine:
             if expert_id in self.experts:
                 expert = self.experts[expert_id]
                 expert_recs = self._get_expert_recommendations(
-                    expert, available_watches, clip_weight, text_weight, exclude_ids
+                    expert, available_watches, clip_weight, text_weight, exclude_ids, session_experts
                 )
                 expert_counts[expert_id] = len(expert_recs)
                 recommendations.extend(expert_recs)
@@ -603,7 +603,7 @@ class DynamicMultiExpertLinUCBEngine:
         
         return final_recommendations
     
-    def _get_expert_recommendations(self, expert, available_watches: List[int], clip_weight: float, text_weight: float, exclude_ids: Set[int]) -> List[Dict[str, Any]]:
+    def _get_expert_recommendations(self, expert, available_watches: List[int], clip_weight: float, text_weight: float, exclude_ids: Set[int], session_experts: List[int]) -> List[Dict[str, Any]]:
         """Get recommendations from expert using weighted similarity between CLIP and text embeddings."""
         if expert.centroid is None:
             return []  # No preferences learned yet
@@ -641,7 +641,14 @@ class DynamicMultiExpertLinUCBEngine:
         
         # Sort by UCB score and return top recommendations
         scores.sort(key=lambda x: x[1], reverse=True)
-        return [self._format_recommendation(watch_id, ucb, f'expert_{expert.expert_id}') for watch_id, ucb in scores[:self.batch_size]]
+        # Find session expert number for this expert
+        if expert.expert_id in session_experts:
+            session_expert_number = session_experts.index(expert.expert_id) + 1
+            expert_label = f'expert_{session_expert_number}'
+        else:
+            expert_label = f'expert_{expert.expert_id}'  # Fallback to global ID
+        
+        return [self._format_recommendation(watch_id, ucb, expert_label) for watch_id, ucb in scores[:self.batch_size]]
     
     def _create_weighted_embedding(self, text_reduced: np.ndarray, clip_reduced: Optional[np.ndarray], 
                                  text_weight: float, clip_weight: float) -> np.ndarray:

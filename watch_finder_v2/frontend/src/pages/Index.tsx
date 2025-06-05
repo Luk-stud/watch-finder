@@ -225,17 +225,18 @@ const Index = () => {
             }`}
             title="Filters"
           >
-            <Filter className={`w-4 h-4 mr-2 ${hasActiveFilters ? 'text-primary' : ''}`} />
-            Filters
+            <Filter className={`w-4 h-4 ${hasActiveFilters ? 'text-primary' : ''} sm:mr-2`} />
+            <span className="hidden sm:inline">Filters</span>
             {hasActiveFilters && (
               <span className="ml-1 w-2 h-2 rounded-full bg-primary"></span>
             )}
           </Link>
           
+          {/* Reset button only on larger screens since filters page also resets */}
           <button
             onClick={resetSession}
             disabled={isLoading}
-            className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3"
+            className="hidden md:inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3"
             title="Reset Session"
           >
             <RotateCcw className="w-4 h-4 mr-2" />
@@ -246,8 +247,8 @@ const Index = () => {
           to="/liked"
             className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3"
         >
-            <Heart className="w-4 h-4 mr-2 text-red-500" />
-            Liked
+            <Heart className="w-4 h-4 text-red-500 sm:mr-2" />
+            <span className="hidden sm:inline">Liked</span>
         </Link>
       </div>
       </header>

@@ -232,9 +232,9 @@ const LikedWatchCard: React.FC<LikedWatchCardProps> = ({ watch }) => {
           </div>
         )}
 
-        {/* Product URL */}
+        {/* Links */}
+        <div className="space-y-2 pt-2">
           {watch.product_url && (
-          <div className="pt-2">
             <a
               href={watch.product_url}
               target="_blank"
@@ -242,10 +242,23 @@ const LikedWatchCard: React.FC<LikedWatchCardProps> = ({ watch }) => {
               className="inline-flex items-center text-xs text-primary hover:text-primary/80 transition-colors"
             >
               <ExternalLink className="w-3 h-3 mr-1" />
-              View Details
+              View Product Details
             </a>
-          </div>
           )}
+          
+          {(watch.brand_website || watch.specs?.brand_website) && 
+           (watch.brand_website !== '-' && watch.specs?.brand_website !== '-') && (
+            <a
+              href={watch.brand_website || watch.specs?.brand_website}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ExternalLink className="w-3 h-3 mr-1" />
+              Visit {watch.brand} Website
+            </a>
+          )}
+        </div>
       </div>
     </div>
   );

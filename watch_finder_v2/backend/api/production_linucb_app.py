@@ -608,6 +608,61 @@ def get_analytics():
             'error_code': 'ANALYTICS_FAILED'
         }), 500
 
+@app.route('/api/liked-watches', methods=['GET'])
+def get_liked_watches():
+    """Get user's liked watches."""
+    if not session_manager:
+        return jsonify({
+            'status': 'error',
+            'message': 'System not initialized'
+        }), 503
+    
+    try:
+        # Get session ID from header
+        session_id = request.headers.get('X-Session-ID')
+        if not session_id:
+            return jsonify({
+                'status': 'error',
+                'message': 'Session ID required in X-Session-ID header',
+                'error_code': 'MISSING_SESSION_ID'
+            }), 400
+        
+        # Get liked watches from the session
+        session_data = session_manager.get_session_info(session_id)
+        if not session_data:
+            return jsonify({
+                'status': 'error',
+                'message': 'Session not found or expired',
+                'error_code': 'SESSION_NOT_FOUND'
+            }), 404
+        
+        # Get liked watch IDs from the engine
+        liked_watch_ids = []
+        if engine and session_id in engine.session_liked_watches:
+            liked_watch_ids = engine.session_liked_watches[session_id]
+        
+        # Get watch details for liked watches
+        liked_watches = []
+        for watch_id in liked_watch_ids:
+            if watch_id in engine.watch_data:
+                watch = sanitize_watch_for_json(engine.watch_data[watch_id])
+                liked_watches.append(watch)
+        
+        return jsonify({
+            'status': 'success',
+            'liked_watches': liked_watches,
+            'count': len(liked_watches),
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting liked watches: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': 'Failed to get liked watches',
+            'error_code': 'LIKED_WATCHES_FAILED'
+        }), 500
+
 @app.route('/api/session/reset', methods=['POST'])
 def reset_session():
     """Reset current session - creates new session and cleans up old one."""
