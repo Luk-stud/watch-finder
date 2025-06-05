@@ -3,7 +3,7 @@
   buildCommand = "pip install -r requirements.txt"
 
 [deploy]
-  startCommand = "python watch_finder_v2/backend/api/production_linucb_app.py"
+  startCommand = "api/production_linucb_app.py"
   healthcheckPath = "/api/health"
   healthcheckTimeout = 300
   restartPolicyType = "ON_FAILURE"
