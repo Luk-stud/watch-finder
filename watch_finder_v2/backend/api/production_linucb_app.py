@@ -28,7 +28,7 @@ import traceback
 
 # Add backend directory to path
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-
+os.makedirs('logs', exist_ok=True)
 # Import configuration
 from config import (
     DEFAULT_PORT, DEBUG, DATA_DIR
