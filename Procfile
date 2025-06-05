@@ -1,1 +1,1 @@
-web: python watch_finder_v2/backend/api/production_linucb_app.py 
+web: cd /app && python watch_finder_v2/backend/api/production_linucb_app.py 
