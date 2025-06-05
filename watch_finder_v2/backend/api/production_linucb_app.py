@@ -172,53 +172,78 @@ def after_request(response):
     """Log response and update metrics."""
     if hasattr(g, 'start_time'):
         duration_ms = (datetime.now() - g.start_time).total_seconds() * 1000
-        logger.info(f"{request.method} {request.path} - {response.status_code} - {duration_ms:.1f}ms")
+        # Only log non-health check requests to reduce noise
+        if request.path != '/api/health':
+            logger.info(f"{request.method} {request.path} - {response.status_code} - {duration_ms:.1f}ms")
+        else:
+            # Log health checks at debug level
+            logger.debug(f"HEALTH CHECK - {response.status_code} - {duration_ms:.1f}ms")
     
     return response
 
 # Core API endpoints
 @app.route('/api/health', methods=['GET'])
 def health():
-    """Health check endpoint."""
-    if session_manager:
-        metrics = session_manager.get_system_metrics()
+    """Health check endpoint - always returns 200 for container health."""
+    try:
+        logger.info("Health check requested")
         
-        # Add expert stats if engine is available
-        if engine:
-            metrics['expert_stats'] = engine.get_expert_stats()
-        
+        # Basic health check - always return 200 for container health
         return jsonify({
             'status': 'healthy',
             'timestamp': datetime.now().isoformat(),
-            'system_metrics': metrics
-        })
-    else:
+            'app_name': 'watch_finder_v2',
+            'version': '2.0.0'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Health check error: {e}")
+        # Even if there's an error, return 200 for basic container health
         return jsonify({
-            'status': 'initializing',
-            'timestamp': datetime.now().isoformat()
-        }), 503
+            'status': 'healthy',
+            'timestamp': datetime.now().isoformat(),
+            'error': str(e)
+        }), 200
 
 @app.route('/api/status', methods=['GET'])
 def status():
     """Detailed system status endpoint."""
-    if not session_manager:
-        return jsonify({
-            'status': 'error',
-            'message': 'System not initialized'
-        }), 503
-    
     try:
-        return jsonify({
+        response_data = {
             'status': 'success',
-            'system_status': session_manager.get_system_metrics(),
-            'timestamp': datetime.now().isoformat()
-        })
+            'timestamp': datetime.now().isoformat(),
+            'system_initialized': session_manager is not None,
+            'engine_initialized': engine is not None
+        }
+        
+        # Try to get metrics if system is available
+        if session_manager:
+            try:
+                metrics = session_manager.get_system_metrics()
+                response_data['system_metrics'] = metrics
+            except Exception as e:
+                logger.warning(f"Failed to get system metrics: {e}")
+                response_data['metrics_error'] = str(e)
+            
+            # Add expert stats if engine is available
+            if engine:
+                try:
+                    response_data['expert_stats'] = engine.get_expert_stats()
+                except Exception as e:
+                    logger.warning(f"Failed to get expert stats: {e}")
+                    response_data['expert_stats_error'] = str(e)
+        else:
+            response_data['status'] = 'initializing'
+            response_data['message'] = 'System not yet initialized'
+        
+        return jsonify(response_data)
         
     except Exception as e:
         logger.error(f"Error getting system status: {e}")
         return jsonify({
             'status': 'error',
-            'message': str(e)
+            'message': str(e),
+            'timestamp': datetime.now().isoformat()
         }), 500
 
 @app.route('/api/session', methods=['POST'])
