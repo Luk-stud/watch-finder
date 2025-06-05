@@ -58,7 +58,8 @@ class Arm:
         """Get coefficient vector, computing if necessary."""
         if self.theta is None:
             try:
-            self.theta = np.linalg.solve(self.A, self.b)
+                # Attempt direct solve
+                self.theta = np.linalg.solve(self.A, self.b)
             except np.linalg.LinAlgError:
                 # Handle singular matrix with regularization
                 regularized_A = self.A + 0.01 * np.identity(self.A.shape[0])

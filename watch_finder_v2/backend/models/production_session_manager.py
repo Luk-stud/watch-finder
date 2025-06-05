@@ -81,7 +81,8 @@ class ProductionSessionManager:
                  max_concurrent_sessions: int = 1000,
                  cleanup_interval_seconds: int = 300,
                  enable_persistence: bool = True,
-                 max_requests_per_minute: int = 60):
+                 max_requests_per_minute: int = 60,
+                 linucb_engine: Optional[OptimizedLinUCBEngine] = None):
         """
         Initialize production session manager.
         
@@ -92,6 +93,7 @@ class ProductionSessionManager:
             cleanup_interval_seconds: Cleanup frequency
             enable_persistence: Enable session persistence
             max_requests_per_minute: Rate limit per session
+            linucb_engine: The LinUCB engine instance to use
         """
         
         self.data_dir = Path(data_dir)
@@ -100,6 +102,10 @@ class ProductionSessionManager:
         self.cleanup_interval_seconds = cleanup_interval_seconds
         self.enable_persistence = enable_persistence
         self.max_requests_per_minute = max_requests_per_minute
+        self.engine = linucb_engine
+        
+        if self.engine is None:
+            raise ValueError("LinUCB engine must be provided")
         
         # Thread-safe session storage
         self.sessions: Dict[str, Session] = {}
@@ -405,6 +411,20 @@ class ProductionSessionManager:
             except Exception as e:
                 logger.error(f"Error cleaning up session {session_id}: {e}")
     
+    def _serialize_for_json(self, obj: Any) -> Any:
+        """Helper method to serialize objects for JSON."""
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        elif isinstance(obj, set):
+            return list(obj)
+        elif isinstance(obj, dict):
+            return {k: self._serialize_for_json(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._serialize_for_json(item) for item in obj]
+        elif hasattr(obj, '__dict__'):
+            return self._serialize_for_json(obj.__dict__)
+        return obj
+
     def _persist_active_sessions(self):
         """Persist active sessions to database."""
         if not self.enable_persistence:
@@ -416,7 +436,7 @@ class ProductionSessionManager:
             
             with self.session_lock:
                 for session_id, session in self.sessions.items():
-                    session_data = json.dumps(session.__dict__)
+                    session_data = json.dumps(self._serialize_for_json(session))
                     
                     cursor.execute('''
                         INSERT OR REPLACE INTO sessions 
@@ -425,8 +445,8 @@ class ProductionSessionManager:
                     ''', (
                         session_id,
                         session_data,
-                        session.created_at,
-                        session.last_activity
+                        session.created_at.isoformat(),
+                        session.last_activity.isoformat()
                     ))
             
             conn.commit()
@@ -501,8 +521,8 @@ class ProductionSessionManager:
                 analytics_file = self.persistence_dir / "final_analytics.json"
                 with open(analytics_file, 'w') as f:
                     json.dump({
-                        'global_metrics': self.global_metrics,
-                        'session_analytics': list(self.session_analytics),
+                        'global_metrics': self._serialize_for_json(self.global_metrics),
+                        'session_analytics': [self._serialize_for_json(a) for a in self.session_analytics],
                         'shutdown_time': datetime.now().isoformat()
                     }, f, indent=2)
                 logger.info("💾 Saved final analytics")

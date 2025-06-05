@@ -98,9 +98,11 @@ def initialize_system() -> bool:
         
         # Initialize session manager with optimized engine
         session_manager = ProductionSessionManager(
-            engine=engine,
-            session_expiry_minutes=60,
-            max_requests_per_minute=60
+            data_dir='data',
+            session_timeout_minutes=60,
+            max_requests_per_minute=60,
+            enable_persistence=True,
+            linucb_engine=engine
         )
         
         logger.info("✅ Optimized LinUCB engine and session manager initialized successfully")
@@ -180,6 +182,11 @@ def health():
     """Health check endpoint."""
     if session_manager:
         metrics = session_manager.get_system_metrics()
+        
+        # Add expert stats if engine is available
+        if engine:
+            metrics['expert_stats'] = engine.get_expert_stats()
+        
         return jsonify({
             'status': 'healthy',
             'timestamp': datetime.now().isoformat(),
@@ -278,7 +285,7 @@ def create_session():
             'error_code': 'SESSION_CREATION_FAILED'
         }), 500
 
-@app.route('/api/recommendations', methods=['GET'])
+@app.route('/api/recommendations', methods=['GET', 'POST'])
 def get_recommendations():
     """Get recommendations for an existing session."""
     if not session_manager:
@@ -291,11 +298,23 @@ def get_recommendations():
         # Get session ID from header
         session_id = request.headers.get('X-Session-ID')
         if not session_id:
-            return jsonify({
-                'status': 'error',
-                'message': 'Session ID required in X-Session-ID header',
-                'error_code': 'MISSING_SESSION_ID'
-            }), 400
+            # Try to get from query params
+            session_id = request.args.get('session_id')
+            if not session_id and request.method == 'POST':
+                # Try to get from request body for POST requests
+                try:
+                    data = request.get_json(force=True, silent=True)
+                    if data:
+                        session_id = data.get('session_id')
+                except:
+                    pass
+            
+            if not session_id:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Session ID required in X-Session-ID header, session_id query parameter, or request body',
+                    'error_code': 'MISSING_SESSION_ID'
+                }), 400
         
         # Get recommendations
         recommendations = session_manager.get_recommendations(session_id)
@@ -350,16 +369,27 @@ def submit_feedback():
         }), 503
     
     try:
-        # Get session ID from header
+        # Get session ID from header, then query params, then request body
         session_id = request.headers.get('X-Session-ID')
+        if not session_id:
+            session_id = request.args.get('session_id') # Check query parameters
+            if not session_id:
+                # Try to get from request body for POST requests
+                try:
+                    data_for_session_id = request.get_json(force=True, silent=True)
+                    if data_for_session_id:
+                        session_id = data_for_session_id.get('session_id')
+                except Exception: # pylint: disable=broad-except
+                    pass  # Ignore if body is not JSON or session_id is not there
+        
         if not session_id:
             return jsonify({
                 'status': 'error',
-                'message': 'Session ID required in X-Session-ID header',
+                'message': 'Session ID required in X-Session-ID header, session_id query parameter, or request body',
                 'error_code': 'MISSING_SESSION_ID'
             }), 400
         
-        # Parse request data
+        # Parse request data (feedback data, not session_id data)
         try:
             data = request.get_json(force=True, silent=True)
             if not data:
@@ -393,14 +423,27 @@ def submit_feedback():
                 'error_code': 'INVALID_FEEDBACK'
             }), 400
         
+        # Convert feedback to boolean for the engine
+        liked = (feedback == 'like')
+        
         # Submit feedback
-        success = session_manager.add_feedback(session_id, watch_id, feedback)
+        success = session_manager.update_feedback(session_id, watch_id, liked)
+        
+        # Get updated expert stats after feedback
+        expert_stats = engine.get_expert_stats() if engine else None
+        
+        # Log expert stats after feedback
+        if expert_stats:
+            logger.info(f"📊 Expert stats after feedback - Global pulls: {expert_stats['global']['total_pulls']}, " +
+                       f"Positive feedback rate: {expert_stats['global']['feedback_rate']:.2%}, " +
+                       f"Active experts: {expert_stats['num_experts']}/{expert_stats['max_experts']}")
         
         return jsonify({
             'status': 'success',
             'message': f'Feedback "{feedback}" recorded for watch {watch_id}',
             'session_id': session_id,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'expert_stats': expert_stats
         })
         
     except ValueError as e:

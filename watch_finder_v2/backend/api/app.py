@@ -21,7 +21,6 @@ from typing import Dict, Any, List
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'models'))
 
 # Import the engine
-from linucb_engine import DynamicMultiExpertLinUCBEngine
 from models.optimized_linucb_engine import OptimizedLinUCBEngine
 from utils.json_utils import convert_numpy_to_python
 from utils.filter_utils import should_include_watch, adjust_watch_score

@@ -141,6 +141,22 @@ class OptimizedExpertLinUCB:
             arm.features = embedding
             self.arms[watch_id] = arm
     
+    def update(self, watch_id: int, reward: float, context: np.ndarray) -> None:
+        """Update expert with feedback."""
+        # Create arm if it doesn't exist
+        if watch_id not in self.arms:
+            arm = OptimizedArm(self.dim)
+            arm.features = context
+            self.arms[watch_id] = arm
+        
+        # Update arm with feedback
+        arm = self.arms[watch_id]
+        arm.update(context, reward)
+        
+        # Update liked watches list and centroid if positive feedback
+        if reward > 0 and watch_id not in self.liked_watches:
+            self.add_liked_watch(watch_id, context)
+    
     def _combine_context(self, centroid: np.ndarray, watch_embedding: np.ndarray) -> np.ndarray:
         """Combine expert centroid with watch embedding using pre-allocated buffer."""
         half_dim = self.dim // 2
@@ -184,7 +200,7 @@ class OptimizedLinUCBEngine:
                  alpha: float = 0.15,
                  batch_size: int = 5,
                  max_experts: int = 6,
-                 similarity_threshold: float = 0.85,
+                 similarity_threshold: float = 0.45,
                  data_dir: Optional[str] = None):
         """Initialize optimized engine."""
         self.dim = dim
@@ -399,57 +415,64 @@ class OptimizedLinUCBEngine:
             ).tolist()
             return [self._format_recommendation(watch_id, 0.5, "Random") for watch_id in selected_watches]
         
-        # Get recommendations from all experts efficiently
-        all_scores = []
+        # Get all scores from all experts
+        all_scores = []  # List of (watch_id, score, expert_id)
         
         # Process available watches in batches
         batch_size = 1000
-        for i in range(0, len(available_watches), batch_size):
-            batch_ids = available_watches[i:i + batch_size]
+        for expert_id in session_experts:
+            if expert_id not in self.experts:
+                continue
+                
+            expert = self.experts[expert_id]
             
-            # Get pre-computed embeddings for this batch
-            batch_embeddings = np.array([
-                self.session_embeddings[session_id][watch_id]
-                for watch_id in batch_ids
-            ])
-            
-            # Get scores from each expert
-            for expert_id in session_experts:
-                if expert_id in self.experts:
-                    expert = self.experts[expert_id]
-                    batch_scores = expert.batch_get_ucb_scores(batch_embeddings)
-                    
-                    # Combine watch IDs with their scores
-                    all_scores.extend(zip(batch_ids, batch_scores))
+            # Process watches in batches
+            for i in range(0, len(available_watches), batch_size):
+                batch_ids = available_watches[i:i + batch_size]
+                
+                # Get pre-computed embeddings for this batch
+                batch_embeddings = np.array([
+                    self.session_embeddings[session_id][watch_id]
+                    for watch_id in batch_ids
+                ])
+                
+                # Get scores for this batch
+                batch_scores = expert.batch_get_ucb_scores(batch_embeddings)
+                
+                # Add scores with expert ID
+                all_scores.extend((watch_id, score, expert_id) 
+                                for watch_id, score in zip(batch_ids, batch_scores))
         
-        # Sort by score and remove duplicates
+        # Sort all scores from all experts
         all_scores.sort(key=lambda x: x[1], reverse=True)
-        seen_watches = set()
-        unique_recommendations = []
         
-        for watch_id, score in all_scores:
-            if watch_id not in seen_watches and len(unique_recommendations) < self.batch_size:
+        # Take top scores while avoiding duplicates
+        seen_watches = set()
+        final_recommendations = []
+        
+        for watch_id, score, expert_id in all_scores:
+            if watch_id not in seen_watches and len(final_recommendations) < self.batch_size:
                 seen_watches.add(watch_id)
-                unique_recommendations.append(
-                    self._format_recommendation(watch_id, score, f"expert")
+                final_recommendations.append(
+                    self._format_recommendation(watch_id, score, f"expert_{expert_id}")
                 )
         
-        # Fill with random recommendations if needed
-        if len(unique_recommendations) < self.batch_size:
+        # Fill remaining slots with random recommendations if needed
+        if len(final_recommendations) < self.batch_size:
             remaining_watches = [w for w in available_watches if w not in seen_watches]
             if remaining_watches:
                 additional = np.random.choice(
                     remaining_watches,
-                    size=min(self.batch_size - len(unique_recommendations), len(remaining_watches)),
+                    size=min(self.batch_size - len(final_recommendations), len(remaining_watches)),
                     replace=False
                 ).tolist()
                 
                 for watch_id in additional:
-                    unique_recommendations.append(
+                    final_recommendations.append(
                         self._format_recommendation(watch_id, 0.4, "random_fill")
                     )
         
-        return unique_recommendations
+        return final_recommendations
     
     def update(self, session_id: str, watch_id: int, reward: float, context: np.ndarray) -> None:
         """Update system with feedback."""
@@ -571,6 +594,60 @@ class OptimizedLinUCBEngine:
             self.watch_text_reduced[watch_id] = text_reduced
             self.watch_clip_reduced[watch_id] = clip_reduced
             self.available_watches.add(watch_id)
+
+    def shutdown(self) -> None:
+        """Clean up resources and prepare for shutdown."""
+        logger.info("🛑 Shutting down OptimizedLinUCBEngine...")
+        # Clear memory
+        self.experts.clear()
+        self.expert_centroids.clear()
+        self.watch_data.clear()
+        self.available_watches.clear()
+        self.session_embeddings.clear()
+        logger.info("✅ OptimizedLinUCBEngine shutdown complete")
+
+    def get_expert_stats(self) -> Dict[str, Any]:
+        """Get comprehensive statistics about the experts."""
+        stats = {
+            'num_experts': len(self.experts),
+            'max_experts': self.max_experts,
+            'experts': []
+        }
+        
+        total_pulls = 0
+        total_positive_feedback = 0
+        
+        for expert_id, expert in self.experts.items():
+            expert_stats = {
+                'expert_id': expert_id,
+                'num_liked_watches': len(expert.liked_watches),
+                'arms': {
+                    'total': len(expert.arms),
+                    'most_pulled': max((arm.total_pulls for arm in expert.arms.values()), default=0),
+                    'most_positive': max((arm.positive_feedback for arm in expert.arms.values()), default=0)
+                }
+            }
+            
+            # Sum up pulls and feedback across all arms
+            expert_total_pulls = sum(arm.total_pulls for arm in expert.arms.values())
+            expert_total_positive = sum(arm.positive_feedback for arm in expert.arms.values())
+            
+            expert_stats['total_pulls'] = expert_total_pulls
+            expert_stats['total_positive_feedback'] = expert_total_positive
+            
+            total_pulls += expert_total_pulls
+            total_positive_feedback += expert_total_positive
+            
+            stats['experts'].append(expert_stats)
+        
+        # Add global stats
+        stats['global'] = {
+            'total_pulls': total_pulls,
+            'total_positive_feedback': total_positive_feedback,
+            'feedback_rate': total_positive_feedback / total_pulls if total_pulls > 0 else 0
+        }
+        
+        return stats
 
 # For backward compatibility
 MultiExpertLinUCBEngine = OptimizedLinUCBEngine

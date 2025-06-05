@@ -1,1 +1,1 @@
-web: python backend/api/modern_app.py 
+web: python watch_finder_v2/backend/api/production_linucb_app.py 
