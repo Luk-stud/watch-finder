@@ -160,11 +160,15 @@ def before_request():
     """Log requests and validate system state."""
     g.start_time = datetime.now()
     
-    # Check if system is initialized
-    if not session_manager and request.endpoint not in ['health', 'status']:
+    # Allow health, ready, and status endpoints even during initialization
+    allowed_endpoints = ['health', 'ready', 'status']
+    
+    # Check if system is initialized for other endpoints
+    if not session_manager and request.endpoint not in allowed_endpoints:
         return jsonify({
             'status': 'error',
-            'message': 'System not initialized'
+            'message': 'System still initializing, please try again in a moment',
+            'error_code': 'SYSTEM_INITIALIZING'
         }), 503
 
 @app.after_request
@@ -186,14 +190,13 @@ def after_request(response):
 def health():
     """Health check endpoint - always returns 200 for container health."""
     try:
-        logger.info("Health check requested")
-        
         # Basic health check - always return 200 for container health
         return jsonify({
             'status': 'healthy',
             'timestamp': datetime.now().isoformat(),
             'app_name': 'watch_finder_v2',
-            'version': '2.0.0'
+            'version': '2.0.0',
+            'system_ready': session_manager is not None
         }), 200
         
     except Exception as e:
@@ -204,6 +207,22 @@ def health():
             'timestamp': datetime.now().isoformat(),
             'error': str(e)
         }), 200
+
+@app.route('/api/ready', methods=['GET'])
+def ready():
+    """Simple readiness check - returns 200 only when system is fully initialized."""
+    if session_manager and engine:
+        return jsonify({
+            'status': 'ready',
+            'timestamp': datetime.now().isoformat()
+        }), 200
+    else:
+        return jsonify({
+            'status': 'initializing',
+            'timestamp': datetime.now().isoformat(),
+            'system_initialized': session_manager is not None,
+            'engine_initialized': engine is not None
+        }), 503
 
 @app.route('/api/status', methods=['GET'])
 def status():
@@ -660,18 +679,42 @@ signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 atexit.register(shutdown_system)
 
+def initialize_system_background():
+    """Initialize the system in the background after Flask starts."""
+    import threading
+    import time
+    
+    def init_worker():
+        start_time = time.time()
+        try:
+            logger.info("🔄 Starting background system initialization...")
+            if initialize_system():
+                elapsed = time.time() - start_time
+                logger.info(f"✅ Background system initialization completed successfully in {elapsed:.1f}s")
+            else:
+                elapsed = time.time() - start_time
+                logger.error(f"❌ Background system initialization failed after {elapsed:.1f}s")
+        except Exception as e:
+            elapsed = time.time() - start_time
+            logger.error(f"❌ Background initialization error after {elapsed:.1f}s: {e}")
+    
+    # Start initialization in background thread
+    init_thread = threading.Thread(target=init_worker, daemon=True)
+    init_thread.start()
+    logger.info("🚀 Background initialization thread started")
+    return init_thread
+
 if __name__ == '__main__':
     logger.info("🚀 Starting Production Watch Finder API...")
+    logger.info("⚡ Quick start mode - initializing system in background...")
     
-    # Initialize system
-    if not initialize_system():
-        logger.error("❌ Failed to initialize system, exiting...")
-        sys.exit(1)
+    # Start background initialization
+    init_thread = initialize_system_background()
     
-    logger.info(f"✅ System initialized, starting server on port {DEFAULT_PORT}...")
+    logger.info(f"🌐 Starting server on port {DEFAULT_PORT}...")
     
     try:
-        # Run production server
+        # Run production server immediately
         app.run(
             host='0.0.0.0',
             port=DEFAULT_PORT,

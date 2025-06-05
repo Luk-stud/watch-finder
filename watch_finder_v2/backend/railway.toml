@@ -3,7 +3,7 @@
   buildCommand = "pip install -r requirements.txt"
 
 [deploy]
-  startCommand = "python api/production_linucb_app.py"
+  startCommand = "python api/fast_start.py"
   healthcheckPath = "/api/health"
   healthcheckTimeout = 300
   restartPolicyType = "ON_FAILURE"
