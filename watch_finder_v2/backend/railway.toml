@@ -3,7 +3,7 @@
   buildCommand = "pip install -r requirements.txt"
 
 [deploy]
-  startCommand = "python api/fast_start.py"
+  startCommand = "gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 120 --preload api.production_linucb_app:app"
   healthcheckPath = "/api/health"
   healthcheckTimeout = 300
   restartPolicyType = "ON_FAILURE"
