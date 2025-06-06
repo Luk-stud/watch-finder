@@ -30,184 +30,81 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-class OptimizedArm:
-    """Represents a single arm (watch) with optimized matrix operations."""
-    def __init__(self, dim: int):
-        self.A: np.ndarray = np.identity(dim)  # d x d matrix
-        self.b: np.ndarray = np.zeros(dim)     # d-dimensional vector
-        self.theta: Optional[np.ndarray] = None # Coefficient vector
-        self._cached_A_inv: Optional[np.ndarray] = None
-        
-        # Watch-specific data
-        self.total_pulls: int = 0
-        self.positive_feedback: int = 0
-        self.last_pull: Optional[datetime] = None
-        self.features: Optional[np.ndarray] = None
-    
-    def update(self, context: np.ndarray, reward: float) -> None:
-        """Update arm parameters with new observation."""
-        self.A += np.outer(context, context)
-        self.b += reward * context
-        self.theta = None  # Reset cached theta
-        self._cached_A_inv = None  # Reset cached inverse
-        
-        self.total_pulls += 1
-        if reward > 0:
-            self.positive_feedback += 1
-        self.last_pull = datetime.now()
-    
-    def get_theta(self) -> np.ndarray:
-        """Get coefficient vector, computing if necessary."""
-        if self.theta is None:
-            try:
-                if self._cached_A_inv is None:
-                    # Add regularization for numerical stability
-                    A_reg = self.A + 0.01 * np.identity(self.A.shape[0])
-                    self._cached_A_inv = np.linalg.inv(A_reg)
-                self.theta = self._cached_A_inv @ self.b
-            except np.linalg.LinAlgError:
-                # Fallback for numerical issues
-                self.theta = np.zeros(self.b.shape)
-        return self.theta
-    
-    def get_ucb(self, context: np.ndarray, alpha: float) -> float:
-        """Calculate UCB score with cached matrix operations."""
-        theta = self.get_theta()
-        mean = np.dot(theta, context)
-        
-        try:
-            if self._cached_A_inv is None:
-                A_reg = self.A + 1e-6 * np.identity(self.A.shape[0])
-                self._cached_A_inv = np.linalg.inv(A_reg)
-            
-            confidence_width = alpha * np.sqrt(np.dot(context.T, np.dot(self._cached_A_inv, context)))
-            
-            # Ensure confidence width is finite and positive
-            if not np.isfinite(confidence_width) or confidence_width < 0:
-                confidence_width = alpha * 0.1  # Safe fallback
-                
-        except (np.linalg.LinAlgError, ValueError):
-            # Fallback for numerical issues
-            confidence_width = alpha * np.sqrt(np.dot(context, context) / max(1, self.total_pulls))
-            
-        return mean + confidence_width
-
-    def batch_ucb(self, contexts: np.ndarray, alpha: float) -> np.ndarray:
-        """Calculate UCB scores for multiple contexts at once."""
-        theta = self.get_theta()
-        means = contexts @ theta  # Vectorized dot product
-        
-        try:
-            if self._cached_A_inv is None:
-                A_reg = self.A + 1e-6 * np.identity(self.A.shape[0])
-                self._cached_A_inv = np.linalg.inv(A_reg)
-            
-            # Vectorized confidence width calculation
-            confidence_widths = alpha * np.sqrt(np.sum(contexts @ self._cached_A_inv * contexts, axis=1))
-            confidence_widths = np.clip(confidence_widths, 0, alpha)  # Ensure positive and bounded
-            
-        except (np.linalg.LinAlgError, ValueError):
-            # Fallback using simpler confidence calculation
-            confidence_widths = alpha * np.sqrt(np.sum(contexts * contexts, axis=1) / max(1, self.total_pulls))
-            
-        return means + confidence_widths
-
-class OptimizedExpertLinUCB:
-    """Single LinUCB expert with optimized operations."""
+class SimplifiedExpert:
+    """Simplified expert using contextual bandits - one arm per expert, not per watch."""
     def __init__(self, expert_id: int, dim: int, alpha: float):
         self.expert_id = expert_id
         self.dim = dim
         self.alpha = alpha
-        self.arms: Dict[int, OptimizedArm] = {}
-        self.centroid: Optional[np.ndarray] = None
-        self.liked_watches: List[int] = []
-        self._context_buffer: np.ndarray = np.zeros(dim)  # Pre-allocated buffer
         
+        # Single LinUCB arm for this expert (using contexts = watch embeddings)
+        self.A = np.identity(dim)  # Feature covariance matrix
+        self.b = np.zeros(dim)     # Feature-reward vector 
+        self.theta = np.zeros(dim) # Learned weights
+        
+        # Expert's preference tracking
+        self.liked_watches: List[int] = []
+        self.centroid: Optional[np.ndarray] = None
+    
     def add_liked_watch(self, watch_id: int, embedding: np.ndarray):
-        """Add a liked watch to this expert's learned preferences."""
+        """Add a liked watch to track expert preferences."""
         self.liked_watches.append(watch_id)
         
-        # Update centroid
+        # Update centroid (simple running average)
         if self.centroid is None:
             self.centroid = embedding.copy()
         else:
-            # Running average of liked watch embeddings
+            # Running average
             alpha = 1.0 / len(self.liked_watches)
             self.centroid = (1 - alpha) * self.centroid + alpha * embedding
         
-        # Normalize centroid for proper cosine similarity
+        # Normalize for cosine similarity
         norm = np.linalg.norm(self.centroid)
         if norm > 0:
             self.centroid = self.centroid / norm
-        
-        # Create an arm for this watch if it doesn't exist, using combined context
-        if watch_id not in self.arms:
-            arm = OptimizedArm(self.dim)
-            arm.features = embedding
-            self.arms[watch_id] = arm
-            logger.debug(f"🎯 Expert {self.expert_id}: Added arm for watch {watch_id} | Total arms: {len(self.arms)}")
     
-    def update(self, watch_id: int, reward: float, watch_embedding: np.ndarray) -> None:
-        """Update expert with feedback using direct embedding as context."""
-        # Use the watch embedding directly as context (already optimized by PCA)
-        context = watch_embedding
+    def update(self, context: np.ndarray, reward: float):
+        """Update expert with feedback using context (watch embedding)."""
+        # Standard LinUCB update
+        self.A += np.outer(context, context)
+        self.b += reward * context
         
-        # Create arm if it doesn't exist
-        if watch_id not in self.arms:
-            arm = OptimizedArm(self.dim)
-            arm.features = watch_embedding  # Store original embedding as features
-            self.arms[watch_id] = arm
-        
-        # Update arm with feedback using direct context
-        arm = self.arms[watch_id]
-        arm.update(context, reward)
-        
-        # Update liked watches list and centroid if positive feedback
-        if reward > 0 and watch_id not in self.liked_watches:
-            self.add_liked_watch(watch_id, watch_embedding)
+        # Solve for theta (expert's learned weights)
+        try:
+            self.theta = np.linalg.solve(self.A, self.b)
+        except np.linalg.LinAlgError:
+            # Fallback for numerical issues
+            A_reg = self.A + 1e-6 * np.identity(self.dim)
+            self.theta = np.linalg.solve(A_reg, self.b)
     
-    def get_ucb_score(self, watch_id: int, watch_embedding: np.ndarray) -> float:
-        """Get UCB score for a single watch using direct embedding as context."""
-        if self.centroid is None:
-            return 0.0
-            
-        # Use the watch embedding directly as context (already normalized from PCA)
-        context = watch_embedding
+    def get_ucb_score(self, context: np.ndarray) -> float:
+        """Get UCB score using context (watch embedding)."""
+        # Standard contextual UCB
+        mean = np.dot(self.theta, context)
         
-        # Get or create arm for this specific watch
-        if watch_id not in self.arms:
-            arm = OptimizedArm(self.dim)
-            arm.features = watch_embedding
-            self.arms[watch_id] = arm
-        else:
-            arm = self.arms[watch_id]
+        try:
+            A_inv = np.linalg.inv(self.A + 1e-6 * np.identity(self.dim))
+            confidence = self.alpha * np.sqrt(np.dot(context, np.dot(A_inv, context)))
+        except np.linalg.LinAlgError:
+            # Simple fallback
+            confidence = self.alpha * np.linalg.norm(context) / np.sqrt(len(self.liked_watches) + 1)
         
-        # Use this watch's specific arm for scoring with direct context
-        return arm.get_ucb(context, self.alpha)
+        return mean + confidence
     
-    def batch_get_ucb_scores(self, watch_ids: List[int], embeddings: np.ndarray) -> np.ndarray:
-        """Get UCB scores for multiple watches using direct embeddings as contexts."""
-        if self.centroid is None:
-            return np.zeros(len(embeddings))
-            
-        scores = np.zeros(len(embeddings))
+    def batch_get_ucb_scores(self, contexts: np.ndarray) -> np.ndarray:
+        """Vectorized UCB scoring for multiple contexts."""
+        # Vectorized mean calculation
+        means = contexts @ self.theta
         
-        for i, (watch_id, embedding) in enumerate(zip(watch_ids, embeddings)):
-            # Use embedding directly as context (no complex blending)
-            context = embedding
-            
-            # Get or create arm for this specific watch
-            if watch_id not in self.arms:
-                arm = OptimizedArm(self.dim)
-                arm.features = embedding
-                self.arms[watch_id] = arm
-            else:
-                arm = self.arms[watch_id]
-            
-            # Use this watch's specific arm for scoring
-            scores[i] = arm.get_ucb(context, self.alpha)
+        try:
+            A_inv = np.linalg.inv(self.A + 1e-6 * np.identity(self.dim))
+            # Vectorized confidence calculation
+            confidences = self.alpha * np.sqrt(np.sum(contexts @ A_inv * contexts, axis=1))
+        except np.linalg.LinAlgError:
+            # Fallback
+            confidences = self.alpha * np.linalg.norm(contexts, axis=1) / np.sqrt(len(self.liked_watches) + 1)
         
-        return scores
+        return means + confidences
 
 class OptimizedLinUCBEngine:
     """Optimized Multi-Expert LinUCB engine with performance improvements."""
@@ -226,14 +123,13 @@ class OptimizedLinUCBEngine:
         self.similarity_threshold = similarity_threshold
         
         # Expert management
-        self.experts: Dict[int, OptimizedExpertLinUCB] = {}
+        self.experts: Dict[int, SimplifiedExpert] = {}
         self.next_expert_id = 0
         
         # Session management
         self.session_experts: Dict[str, List[int]] = {}
         self.session_liked_watches: Dict[str, List[int]] = {}  # Used by API for liked watches endpoint
         self.session_embeddings: Dict[str, Dict[int, np.ndarray]] = {}
-        self.session_embedding_weights: Dict[str, Tuple[float, float]] = {}
         self.session_shown_watches: Dict[str, Set[int]] = {}
         
         # Watch data
@@ -249,11 +145,7 @@ class OptimizedLinUCBEngine:
         )
         self._load_data()
         
-        # Pre-allocate reusable arrays
-        self._embedding_buffer = np.zeros(dim)
-        self._batch_context_buffer = np.zeros((batch_size, dim))
-        
-        logger.info(f"✅ Optimized LinUCB engine initialized with {len(self.watch_data)} watches")
+        logger.info(f"✅ Simplified LinUCB engine initialized with {len(self.watch_data)} watches")
     
     def _load_data(self) -> None:
         """Load and preprocess watch data with detailed logging."""
@@ -571,7 +463,7 @@ class OptimizedLinUCBEngine:
                 ])
                 
                 # Get scores for this batch
-                batch_scores = expert.batch_get_ucb_scores(batch_ids, batch_embeddings)
+                batch_scores = expert.batch_get_ucb_scores(batch_embeddings)
                 
                 # Store scores for this expert
                 for watch_id, score in zip(batch_ids, batch_scores):
@@ -664,7 +556,7 @@ class OptimizedLinUCBEngine:
                 self.session_experts[session_id].append(expert_id)
                 expert = self.experts[expert_id]
                 expert.add_liked_watch(watch_id, watch_embedding)
-                expert.update(watch_id, reward, watch_embedding)
+                expert.update(watch_embedding, reward)
                 logger.info(f"👤 Session {session_id}: First expert {expert_id} initialized with watch {watch_id}")
             return
         
@@ -687,7 +579,7 @@ class OptimizedLinUCBEngine:
                 # Add to existing expert
                 expert = self.experts[best_expert_id]
                 expert.add_liked_watch(watch_id, watch_embedding)
-                expert.update(watch_id, reward, watch_embedding)
+                expert.update(watch_embedding, reward)
                 logger.info(f"✅ Expert {best_expert_id}: Added watch {watch_id} (similarity: {best_similarity:.3f} ≥ {self.similarity_threshold}) | Liked watches: {len(expert.liked_watches)}")
             elif len(session_experts) < self.max_experts:
                 # Create new expert
@@ -695,13 +587,13 @@ class OptimizedLinUCBEngine:
                 self.session_experts[session_id].append(expert_id)
                 expert = self.experts[expert_id]
                 expert.add_liked_watch(watch_id, watch_embedding)
-                expert.update(watch_id, reward, watch_embedding)
+                expert.update(watch_embedding, reward)
                 logger.info(f"🆕 Expert {expert_id}: New expert created for watch {watch_id} (similarity: {best_similarity:.3f} < {self.similarity_threshold})")
             else:
                 # Add to best expert if at limit
                 expert = self.experts[best_expert_id]
                 expert.add_liked_watch(watch_id, watch_embedding)
-                expert.update(watch_id, reward, watch_embedding)
+                expert.update(watch_embedding, reward)
                 logger.info(f"🔄 Expert {best_expert_id}: Added watch {watch_id} (at max experts, best similarity: {best_similarity:.3f}) | Liked watches: {len(expert.liked_watches)}")
         else:
             # Update all experts with negative feedback
@@ -709,7 +601,7 @@ class OptimizedLinUCBEngine:
             for expert_id in session_experts:
                 if expert_id in self.experts:
                     expert = self.experts[expert_id]
-                    expert.update(watch_id, reward, watch_embedding)
+                    expert.update(watch_embedding, reward)
                     negative_count += 1
             logger.info(f"👎 Negative feedback: Updated {negative_count} experts with watch {watch_id} (reward: {reward})")
     
@@ -758,7 +650,7 @@ class OptimizedLinUCBEngine:
         """Create a new expert and return its ID."""
         expert_id = self.next_expert_id
         self.next_expert_id += 1
-        self.experts[expert_id] = OptimizedExpertLinUCB(expert_id, self.dim, self.alpha)
+        self.experts[expert_id] = SimplifiedExpert(expert_id, self.dim, self.alpha)
         logger.info(f"🧠 Created Expert {expert_id} | Total experts: {len(self.experts)}/{self.max_experts}")
         return expert_id
     
@@ -823,37 +715,25 @@ class OptimizedLinUCBEngine:
             'experts': []
         }
         
-        total_pulls = 0
         total_positive_feedback = 0
         
         for expert_id, expert in self.experts.items():
             expert_stats = {
                 'expert_id': expert_id,
                 'num_liked_watches': len(expert.liked_watches),
-                'arms': {
-                    'total': len(expert.arms),
-                    'most_pulled': max((arm.total_pulls for arm in expert.arms.values()), default=0),
-                    'most_positive': max((arm.positive_feedback for arm in expert.arms.values()), default=0)
-                }
+                'theta_norm': float(np.linalg.norm(expert.theta)),
+                'A_trace': float(np.trace(expert.A))  # Measure of learning activity
             }
             
-            # Sum up pulls and feedback across all arms
-            expert_total_pulls = sum(arm.total_pulls for arm in expert.arms.values())
-            expert_total_positive = sum(arm.positive_feedback for arm in expert.arms.values())
-            
-            expert_stats['total_pulls'] = expert_total_pulls
-            expert_stats['total_positive_feedback'] = expert_total_positive
-            
-            total_pulls += expert_total_pulls
-            total_positive_feedback += expert_total_positive
+            expert_stats['total_positive_feedback'] = len(expert.liked_watches)
+            total_positive_feedback += len(expert.liked_watches)
             
             stats['experts'].append(expert_stats)
         
         # Add global stats
         stats['global'] = {
-            'total_pulls': total_pulls,
             'total_positive_feedback': total_positive_feedback,
-            'feedback_rate': total_positive_feedback / total_pulls if total_pulls > 0 else 0
+            'avg_feedback_per_expert': total_positive_feedback / len(self.experts) if self.experts else 0
         }
         
         return stats
