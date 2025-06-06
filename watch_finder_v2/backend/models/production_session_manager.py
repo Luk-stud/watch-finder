@@ -21,6 +21,7 @@ import threading
 import time
 import uuid
 import weakref
+import traceback
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Set, Tuple
 from dataclasses import dataclass, field, asdict
@@ -31,7 +32,7 @@ import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
-from .optimized_linucb_engine import OptimizedLinUCBEngine
+from .fast_linucb_engine import FastLinUCBEngine
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,7 @@ class ProductionSessionManager:
                  cleanup_interval_seconds: int = 300,
                  enable_persistence: bool = True,
                  max_requests_per_minute: int = 60,
-                 linucb_engine: Optional[OptimizedLinUCBEngine] = None):
+                 linucb_engine: Optional[FastLinUCBEngine] = None):
         """
         Initialize production session manager.
         
@@ -330,14 +331,22 @@ class ProductionSessionManager:
         
         # Update engine
         try:
+            # FastLinUCBEngine expects 1.0 for like, -1.0 for dislike
+            reward = 1.0 if liked else -1.0
             self.engine.update(
                 session_id=session_id,
                 watch_id=watch_id,
-                reward=1.0 if liked else 0.0
+                reward=reward
             )
+            
+            # Log the feedback processing
+            feedback_type = "like" if liked else "dislike"
+            logger.info(f"✅ Processed {feedback_type} feedback for watch {watch_id} in session {session_id}")
+            
             return True
         except Exception as e:
-            logger.error(f"Error updating feedback: {e}")
+            logger.error(f"❌ Error updating feedback for watch {watch_id} in session {session_id}: {e}")
+            logger.error(f"❌ Error details: {traceback.format_exc()}")
             return False
     
     def _validate_and_get_session(self, session_id: str) -> Optional[Session]:

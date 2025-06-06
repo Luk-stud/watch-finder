@@ -1,11 +1,11 @@
 {
   "global_metrics": {
-    "total_sessions_created": 1,
-    "total_recommendations_served": 70,
-    "peak_concurrent_sessions": 1,
+    "total_sessions_created": 0,
+    "total_recommendations_served": 0,
+    "peak_concurrent_sessions": 0,
     "total_server_uptime_seconds": 0.0,
-    "start_time": "2025-06-05T22:59:47.413316"
+    "start_time": "2025-06-06T23:00:11.756689"
   },
   "session_analytics": [],
-  "shutdown_time": "2025-06-05T23:02:51.789805"
+  "shutdown_time": "2025-06-06T23:00:11.761961"
 }
