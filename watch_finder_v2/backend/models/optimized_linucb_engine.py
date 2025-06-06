@@ -148,13 +148,9 @@ class OptimizedExpertLinUCB:
             logger.debug(f"🎯 Expert {self.expert_id}: Added arm for watch {watch_id} | Total arms: {len(self.arms)}")
     
     def update(self, watch_id: int, reward: float, watch_embedding: np.ndarray) -> None:
-        """Update expert with feedback using consistent combined context."""
-        # Create combined context for both training and scoring consistency
-        if self.centroid is not None:
-            combined_context = self._combine_context(self.centroid, watch_embedding)
-        else:
-            # If no centroid yet, use the embedding itself (padded/truncated to dim)
-            combined_context = self._prepare_context(watch_embedding)
+        """Update expert with feedback using direct embedding as context."""
+        # Use the watch embedding directly as context (already optimized by PCA)
+        context = watch_embedding
         
         # Create arm if it doesn't exist
         if watch_id not in self.arms:
@@ -162,86 +158,43 @@ class OptimizedExpertLinUCB:
             arm.features = watch_embedding  # Store original embedding as features
             self.arms[watch_id] = arm
         
-        # Update arm with feedback using combined context
+        # Update arm with feedback using direct context
         arm = self.arms[watch_id]
-        arm.update(combined_context, reward)
+        arm.update(context, reward)
         
         # Update liked watches list and centroid if positive feedback
         if reward > 0 and watch_id not in self.liked_watches:
             self.add_liked_watch(watch_id, watch_embedding)
     
-    def _prepare_context(self, embedding: np.ndarray) -> np.ndarray:
-        """Prepare context when no centroid exists yet."""
-        if len(embedding) >= self.dim:
-            return embedding[:self.dim] / np.linalg.norm(embedding[:self.dim])
-        else:
-            padded = np.zeros(self.dim)
-            padded[:len(embedding)] = embedding
-            norm = np.linalg.norm(padded)
-            return padded / norm if norm > 0 else padded
-    
-    def _combine_context(self, centroid: np.ndarray, watch_embedding: np.ndarray) -> np.ndarray:
-        """Combine expert centroid with watch embedding creating a unique context."""
-        half_dim = self.dim // 2
-        
-        # Combine expert preferences with watch features
-        # Use expert centroid (text) + watch's unique CLIP features for differentiation
-        expert_text = centroid[:half_dim]
-        watch_text = watch_embedding[:half_dim]  
-        watch_clip = watch_embedding[half_dim:]
-        
-        # Create context that balances expert preference with watch uniqueness
-        # Weighted blend of expert preference and watch text + full watch CLIP
-        blended_text = 0.8 * expert_text + 0.2 * watch_text  # Mostly expert preference
-        
-        # Create NEW array instead of reusing buffer to avoid reference issues
-        combined_context = np.concatenate([blended_text, watch_clip])
-        
-        # Normalize combined context
-        norm = np.linalg.norm(combined_context)
-        if norm > 0:
-            combined_context = combined_context / norm
-        
-        return combined_context
-    
     def get_ucb_score(self, watch_id: int, watch_embedding: np.ndarray) -> float:
-        """Get UCB score for a single watch using its individual arm."""
+        """Get UCB score for a single watch using direct embedding as context."""
         if self.centroid is None:
             return 0.0
             
-        # Create combined context (same as used in training)
-        combined_context = self._combine_context(self.centroid, watch_embedding)
+        # Use the watch embedding directly as context (already normalized from PCA)
+        context = watch_embedding
         
         # Get or create arm for this specific watch
         if watch_id not in self.arms:
             arm = OptimizedArm(self.dim)
             arm.features = watch_embedding
-            
-            # Initialize arm with watch-specific bias for differentiation
-            # Use similarity to expert centroid to give relevant watches higher initial scores
-            np.random.seed(watch_id)  # Deterministic but unique per watch
-            similarity = np.dot(combined_context, self.centroid) if self.centroid is not None else 0.0
-            base_bias = 0.1 * similarity  # Bias based on relevance to expert
-            random_bias = np.random.normal(0, 0.05, self.dim)  # Random component for exploration
-            arm.b = base_bias * combined_context + random_bias
-            
             self.arms[watch_id] = arm
         else:
             arm = self.arms[watch_id]
         
-        # Use this watch's specific arm for scoring
-        return arm.get_ucb(combined_context, self.alpha)
+        # Use this watch's specific arm for scoring with direct context
+        return arm.get_ucb(context, self.alpha)
     
     def batch_get_ucb_scores(self, watch_ids: List[int], embeddings: np.ndarray) -> np.ndarray:
-        """Get UCB scores for multiple watches using their individual arms."""
+        """Get UCB scores for multiple watches using direct embeddings as contexts."""
         if self.centroid is None:
             return np.zeros(len(embeddings))
             
         scores = np.zeros(len(embeddings))
         
         for i, (watch_id, embedding) in enumerate(zip(watch_ids, embeddings)):
-            # Create combined context for this watch
-            combined_context = self._combine_context(self.centroid, embedding)
+            # Use embedding directly as context (no complex blending)
+            context = embedding
             
             # Get or create arm for this specific watch
             if watch_id not in self.arms:
@@ -252,7 +205,7 @@ class OptimizedExpertLinUCB:
                 arm = self.arms[watch_id]
             
             # Use this watch's specific arm for scoring
-            scores[i] = arm.get_ucb(combined_context, self.alpha)
+            scores[i] = arm.get_ucb(context, self.alpha)
         
         return scores
 
