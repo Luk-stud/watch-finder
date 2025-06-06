@@ -774,6 +774,47 @@ def reset_session():
             'response_time_ms': response_time
         }), 500
 
+@app.route('/api/debug', methods=['GET'])
+def debug_info():
+    """Debug endpoint to check system state."""
+    try:
+        debug_data = {
+            'engine_type': type(engine).__name__ if engine else 'None',
+            'engine_class': str(type(engine)) if engine else 'None',
+            'session_manager_type': type(session_manager).__name__ if session_manager else 'None',
+            'precomputed_file_exists': os.path.exists('data/precomputed_embeddings.pkl'),
+            'precomputed_file_size_mb': round(os.path.getsize('data/precomputed_embeddings.pkl') / (1024*1024), 2) if os.path.exists('data/precomputed_embeddings.pkl') else 0,
+            'data_dir_contents': os.listdir('data') if os.path.exists('data') else [],
+            'current_working_dir': os.getcwd(),
+            'python_path': sys.path[:3],  # First 3 entries
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        # Add engine-specific info
+        if engine:
+            if hasattr(engine, 'dim'):
+                debug_data['engine_dimension'] = engine.dim
+            if hasattr(engine, 'available_watches'):
+                debug_data['available_watches_count'] = len(engine.available_watches)
+            if hasattr(engine, 'watch_data'):
+                debug_data['watch_data_count'] = len(engine.watch_data)
+        
+        return jsonify({
+            'status': 'success',
+            'debug': debug_data
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e),
+            'debug': {
+                'engine_exists': engine is not None,
+                'session_manager_exists': session_manager is not None,
+                'timestamp': datetime.now().isoformat()
+            }
+        })
+
 def signal_handler(signum, frame):
     """Handle shutdown signals gracefully."""
     logger.info(f"Received signal {signum}, shutting down gracefully...")
