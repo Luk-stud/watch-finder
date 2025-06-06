@@ -14,13 +14,9 @@ import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useFilters } from '@/context/FiltersContext';
 import { filtersApi, FilterOptions } from '@/services/filtersApi';
-import { Settings, Filter, Sliders, Eye, Brain, Palette, Search, Loader2, AlertTriangle } from 'lucide-react';
+import { Settings, Filter, Sliders, Search, Loader2, AlertTriangle } from 'lucide-react';
 
 export interface FilterPreferences {
-  // Similarity preferences
-  clipSimilarityWeight: number; // 0-100, how much visual similarity matters
-  textSimilarityWeight: number; // 0-100, how much description/vibe similarity matters
-  
   // Watch filters
   brands: string[];
   priceRange: [number, number];
@@ -44,8 +40,6 @@ export interface FilterPreferences {
 }
 
 const DEFAULT_FILTERS: FilterPreferences = {
-  clipSimilarityWeight: 50,
-  textSimilarityWeight: 50,
   brands: [],
   priceRange: [0, 50000],
   caseMaterials: [],
@@ -134,16 +128,7 @@ const Filters: React.FC = () => {
   };
   
   const handleSaveAndContinue = () => {
-    // Validate similarity weights
-    const totalWeight = filters.clipSimilarityWeight + filters.textSimilarityWeight;
-    if (totalWeight === 0) {
-      toast({
-        title: "Invalid Similarity Settings",
-        description: "At least one similarity type must have weight > 0",
-        variant: "destructive"
-      });
-      return;
-    }
+
     
     toast({
       title: "Filters Saved! 🎯",
@@ -197,77 +182,7 @@ const Filters: React.FC = () => {
             )}
           </div>
           
-          {/* Similarity Preferences - Most Important */}
-          <Card className="border-2 border-blue-200 bg-blue-50/50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Brain className="h-5 w-5 text-blue-600" />
-                Recommendation Algorithm Preferences
-              </CardTitle>
-              <CardDescription>
-                Balance between visual similarity (how watches look) and vibe similarity (style descriptions, mood, occasion)
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Visual Similarity Weight */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label className="flex items-center gap-2">
-                    <Eye className="h-4 w-4 text-purple-600" />
-                    Visual Similarity Weight: {filters.clipSimilarityWeight}%
-                  </Label>
-                  <Badge variant="secondary">{filters.clipSimilarityWeight}%</Badge>
-                </div>
-                <Slider
-                  value={[filters.clipSimilarityWeight]}
-                  onValueChange={([value]) => updateFilter('clipSimilarityWeight', value)}
-                  max={100}
-                  step={5}
-                  className="w-full"
-                />
-                <p className="text-sm text-gray-600">
-                  How much visual appearance matters (case shape, dial layout, hands, markers, colors, materials)
-                </p>
-              </div>
-              
-              {/* Text/Vibe Similarity Weight */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label className="flex items-center gap-2">
-                    <Palette className="h-4 w-4 text-green-600" />
-                    Vibe Similarity Weight: {filters.textSimilarityWeight}%
-                  </Label>
-                  <Badge variant="secondary">{filters.textSimilarityWeight}%</Badge>
-                </div>
-                <Slider
-                  value={[filters.textSimilarityWeight]}
-                  onValueChange={([value]) => updateFilter('textSimilarityWeight', value)}
-                  max={100}
-                  step={5}
-                  className="w-full"
-                />
-                <p className="text-sm text-gray-600">
-                  How much style and mood matters (elegance, sportiness, occasion, personality, feeling)
-                </p>
-              </div>
-              
-              {/* Total weight indicator */}
-              <div className="bg-white p-3 rounded-lg border">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium">Total Weight:</span>
-                  <span className="font-bold text-lg">
-                    {filters.clipSimilarityWeight + filters.textSimilarityWeight}%
-                  </span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-                  <div 
-                    className="bg-gradient-to-r from-purple-500 to-green-500 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${Math.min(100, filters.clipSimilarityWeight + filters.textSimilarityWeight)}%` }}
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+
           
           {/* Watch Filters */}
           <Card>
@@ -624,12 +539,7 @@ const Filters: React.FC = () => {
                       ${filters.priceRange[0].toLocaleString()} - ${filters.priceRange[1].toLocaleString()}
                     </Badge>
                   </div>
-                  <div>
-                    <span className="font-medium">Algorithm: </span>
-                    <Badge variant="outline">
-                      {filters.clipSimilarityWeight}% Visual + {filters.textSimilarityWeight}% Vibe
-                    </Badge>
-                  </div>
+
                 </div>
               </CardContent>
             </Card>

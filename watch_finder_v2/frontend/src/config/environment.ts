@@ -65,6 +65,22 @@ const getApiBaseUrl = (): string => {
     
     case 'development':
     default:
+      // Smart network detection for development
+      if (typeof window !== 'undefined') {
+        const hostname = window.location.hostname;
+        
+        // If accessing via IP address (mobile on network), use the same IP for backend
+        if (hostname.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+          return `http://${hostname}:5001/api`;
+        }
+        
+        // If accessing via local network name, use the same hostname
+        if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+          return `http://${hostname}:5001/api`;
+        }
+      }
+      
+      // Default to localhost for local development
       return 'http://localhost:5001/api';
   }
 };
@@ -97,13 +113,26 @@ const createEnvironmentConfig = (): EnvironmentConfig => {
 
     case 'development':
     default:
+      // Dynamic fallback URLs based on current hostname
+      const getFallbackUrls = (): string[] => {
+        const fallbacks = [
+          'http://localhost:5001/api',
+          'http://127.0.0.1:5001/api'
+        ];
+        
+        if (typeof window !== 'undefined') {
+          const hostname = window.location.hostname;
+          if (hostname.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+            fallbacks.unshift(`http://${hostname}:5001/api`);
+          }
+        }
+        
+        return fallbacks;
+      };
+      
       return {
         ...baseConfig,
-  FALLBACK_URLS: [
-    'http://localhost:5001/api',
-    'http://127.0.0.1:5001/api',
-          'http://0.0.0.0:5001/api'
-        ],
+        FALLBACK_URLS: getFallbackUrls(),
         FEATURES: {
           ENABLE_DEBUG_PANELS: true,
           ENABLE_CONNECTION_TEST: true,

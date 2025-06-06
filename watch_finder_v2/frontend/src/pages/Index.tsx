@@ -41,11 +41,32 @@ const Index = () => {
       setIsLoading(true);
       setError(null);
       
-      // Reset seen watches when starting new session
-      setSeenWatchIds(new Set());
-
       // Check backend health first
       await apiService.checkHealth();
+      
+      // If we have an existing session, try to get recommendations for it
+      if (apiService.hasActiveSession()) {
+        console.log('📱 Continuing existing session:', apiService.getSessionId());
+        try {
+          const response = await apiService.getRecommendations();
+          
+          if (response.status === 'success' && response.recommendations?.length > 0) {
+            setCurrentWatches(response.recommendations);
+            setCurrentIndex(0);
+            
+            // Don't reset seen watches for existing session
+            const newSeenIds = new Set(response.recommendations.map(w => w.watch_id || w.index));
+            setSeenWatchIds(newSeenIds);
+            return; // Successfully continued session
+          }
+        } catch (sessionError) {
+          console.warn('Failed to continue existing session, starting new one:', sessionError);
+          // Fall through to start new session
+        }
+      }
+      
+      // Reset seen watches when starting new session
+      setSeenWatchIds(new Set());
       
       // Start a new session and get initial recommendations
       const response = await apiService.startSession();

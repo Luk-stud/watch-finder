@@ -1,10 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 export interface FilterPreferences {
-  // Similarity preferences
-  clipSimilarityWeight: number; // 0-100, how much visual similarity matters
-  textSimilarityWeight: number; // 0-100, how much description/vibe similarity matters
-  
   // Watch filters
   brands: string[];
   priceRange: [number, number];
@@ -28,8 +24,6 @@ export interface FilterPreferences {
 }
 
 const DEFAULT_FILTERS: FilterPreferences = {
-  clipSimilarityWeight: 50,
-  textSimilarityWeight: 50,
   brands: [],
   priceRange: [0, 50000],
   caseMaterials: [],
@@ -113,9 +107,7 @@ export const FiltersProvider: React.FC<FiltersProviderProps> = ({ children }) =>
     filters.waterResistance !== DEFAULT_FILTERS.waterResistance ||
     filters.limitedEdition !== null ||
     filters.vintage !== null ||
-    filters.inStock !== DEFAULT_FILTERS.inStock ||
-    filters.clipSimilarityWeight !== DEFAULT_FILTERS.clipSimilarityWeight ||
-    filters.textSimilarityWeight !== DEFAULT_FILTERS.textSimilarityWeight;
+    filters.inStock !== DEFAULT_FILTERS.inStock;
 
   const value = {
     filters,

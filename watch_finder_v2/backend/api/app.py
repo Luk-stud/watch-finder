@@ -17,13 +17,14 @@ import pickle
 import numpy as np
 from typing import Dict, Any, List
 
-# Add the models directory to the path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'models'))
+# Add the backend directory to the path for imports
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, backend_dir)
 
 # Import the engine
 from models.optimized_linucb_engine import OptimizedLinUCBEngine
 from utils.json_utils import convert_numpy_to_python
-from utils.filter_utils import should_include_watch, adjust_watch_score
+from utils.filter_utils import should_include_watch
 
 # Set up logging
 logging.basicConfig(
@@ -67,7 +68,6 @@ else:
 # Global engine instance
 engine = None
 
-@app.before_first_request
 def initialize():
     global engine
     try:
@@ -253,18 +253,9 @@ def get_recommendations():
         # Get filter preferences from request
         filter_preferences = data.get('filter_preferences', {})
         
-        # Extract similarity weights (default to equal weighting)
-        clip_weight = filter_preferences.get('clipSimilarityWeight', 50) / 100.0
-        text_weight = filter_preferences.get('textSimilarityWeight', 50) / 100.0
-        
-        # Create minimal context vector - only include the weights we need
-        # LinUCB engine only uses first 2 dimensions anyway
-        context = np.array([clip_weight, text_weight])
-        
         # Get raw recommendations from engine
         recommendations = engine.get_recommendations(
             session_id=session_id,
-            context=context,
             exclude_ids=exclude_ids
         )
         
@@ -323,16 +314,6 @@ def get_recommendations():
         # Convert all numpy types to Python types for JSON serialization
         json_safe_recommendations = convert_numpy_to_python(filtered_recommendations)
         
-        # Check if embedding weights are locked for this session
-        weights_locked = session_id in engine.session_embedding_weights
-        current_weights = None
-        if weights_locked:
-            clip_w, text_w = engine.session_embedding_weights[session_id]
-            current_weights = {
-                'clipSimilarityWeight': int(clip_w * 100),
-                'textSimilarityWeight': int(text_w * 100)
-            }
-        
         logger.info(f"✅ Generated {len(json_safe_recommendations)} filtered recommendations for session {session_id}")
         
         return jsonify({
@@ -340,9 +321,7 @@ def get_recommendations():
             'recommendations': json_safe_recommendations,
             'session_id': session_id,
             'count': len(json_safe_recommendations),
-            'filter_preferences': filter_preferences,
-            'embedding_weights_locked': weights_locked,
-            'current_embedding_weights': current_weights
+            'filter_preferences': filter_preferences
         })
         
     except Exception as e:
@@ -359,9 +338,7 @@ def apply_user_filters(recommendations, filter_preferences):
     
     for watch in recommendations:
         if should_include_watch(watch, filter_preferences):
-            # Adjust score based on similarity preferences
-            adjusted_watch = adjust_watch_score(watch, filter_preferences)
-            filtered.append(adjusted_watch)
+            filtered.append(watch)
     
     return filtered
 
@@ -383,15 +360,11 @@ def submit_feedback():
         # Convert feedback to reward
         reward = 1.0 if feedback == 'like' else 0.0
         
-        # Create minimal context for update (engine extends as needed)
-        context = np.array([0.5, 0.5])  # Default equal weights
-        
         # Update the engine
         engine.update(
             session_id=session_id,
             watch_id=watch_id,
-            reward=reward,
-            context=context
+            reward=reward
         )
         
         logger.info(f"✅ Processed {feedback} feedback for watch {watch_id} in session {session_id}")
@@ -461,43 +434,26 @@ def get_session_status(session_id):
         # Check if session exists and get its status
         session_exists = (
             session_id in engine.session_liked_watches or 
-            session_id in engine.session_experts or 
-            session_id in engine.session_embedding_weights
+            session_id in engine.session_experts
         )
         
         if not session_exists:
             return jsonify({
                 'session_id': session_id,
                 'exists': False,
-                'embedding_weights_locked': False,
-                'current_embedding_weights': None,
                 'experts_count': 0,
-                'likes_count': 0,
-                'interaction_count': 0
+                'likes_count': 0
             })
         
         # Get session details
-        weights_locked = session_id in engine.session_embedding_weights
-        current_weights = None
-        if weights_locked:
-            clip_w, text_w = engine.session_embedding_weights[session_id]
-            current_weights = {
-                'clipSimilarityWeight': int(clip_w * 100),
-                'textSimilarityWeight': int(text_w * 100)
-            }
-        
         experts_count = len(engine.session_experts.get(session_id, []))
         likes_count = len(engine.session_liked_watches.get(session_id, []))
-        interaction_count = engine.session_interaction_counts.get(session_id, 0)
         
         return jsonify({
             'session_id': session_id,
             'exists': True,
-            'embedding_weights_locked': weights_locked,
-            'current_embedding_weights': current_weights,
             'experts_count': experts_count,
             'likes_count': likes_count,
-            'interaction_count': interaction_count,
             'timestamp': datetime.now().isoformat()
         })
         
@@ -516,4 +472,7 @@ if __name__ == '__main__':
     debug = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     
     logger.info(f"🌐 Starting server on port {port}, debug={debug}")
-    app.run(host='0.0.0.0', port=port, debug=debug) 
+    app.run(host='0.0.0.0', port=port, debug=debug)
+
+# Initialize on import for production
+initialize() 

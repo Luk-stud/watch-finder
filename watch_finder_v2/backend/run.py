@@ -4,7 +4,7 @@ Main entry point for the Watch Finder backend.
 
 import os
 import sys
-from api.linucb_app import app, initialize_system
+from api.production_linucb_app import app, initialize_system
 from config import DEFAULT_PORT, DEBUG
 
 if __name__ == '__main__':

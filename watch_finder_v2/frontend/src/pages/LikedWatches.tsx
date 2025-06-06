@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Watch, getWatchImageUrl, formatPrice, getWatchPrice } from '../data/watchData';
 import { ArrowLeft, Heart, ExternalLink, Info, Loader2, AlertTriangle, Settings } from 'lucide-react';
 import { useViewportHeight } from '../hooks/useViewportHeight';
@@ -9,6 +9,7 @@ const LikedWatches = () => {
   const [likedWatches, setLikedWatches] = useState<Watch[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   // Use the viewport height hook for mobile browser compatibility
   useViewportHeight();
@@ -80,12 +81,19 @@ const LikedWatches = () => {
         <div className="p-4 max-w-6xl mx-auto">
           <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-        <Link
-                to="/"
+        <button
+                onClick={() => {
+                  // Navigate back to swipe page if session exists, otherwise to landing page
+                  if (apiService.hasActiveSession()) {
+                    navigate('/swipe');
+                  } else {
+                    navigate('/');
+                  }
+                }}
                 className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 w-9"
         >
                 <ArrowLeft className="w-4 h-4" />
-        </Link>
+        </button>
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
                   <Heart className="w-4 h-4 text-primary-foreground" />
@@ -118,12 +126,19 @@ const LikedWatches = () => {
               <p className="text-muted-foreground mb-8 max-w-md mx-auto leading-relaxed">
                 Start discovering and liking watches to build your personal collection
               </p>
-            <Link
-                to="/"
+            <button
+                onClick={() => {
+                  // Navigate to swipe page if session exists, otherwise to landing page
+                  if (apiService.hasActiveSession()) {
+                    navigate('/swipe');
+                  } else {
+                    navigate('/');
+                  }
+                }}
                 className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-6 py-2"
             >
-                Start Discovering
-            </Link>
+                {apiService.hasActiveSession() ? 'Continue Session' : 'Start Discovering'}
+            </button>
           </div>
         ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -233,7 +248,7 @@ const LikedWatchCard: React.FC<LikedWatchCardProps> = ({ watch }) => {
         )}
 
         {/* Links */}
-        <div className="space-y-2 pt-2">
+        <div className="space-y-3 pt-3 border-t border-border">
           {watch.product_url && (
             <a
               href={watch.product_url}
@@ -246,16 +261,16 @@ const LikedWatchCard: React.FC<LikedWatchCardProps> = ({ watch }) => {
             </a>
           )}
           
-          {(watch.brand_website || watch.specs?.brand_website) && 
-           (watch.brand_website !== '-' && watch.specs?.brand_website !== '-') && (
+          {/* Additional product link if different from main product_url */}
+          {watch.specs?.url && watch.specs.url !== watch.product_url && (
             <a
-              href={watch.brand_website || watch.specs?.brand_website}
+              href={watch.specs.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center text-xs text-muted-foreground hover:text-foreground transition-colors"
+              className="inline-flex items-center text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300 transition-colors"
             >
-              <ExternalLink className="w-3 h-3 mr-1" />
-              Visit {watch.brand} Website
+              <ExternalLink className="w-4 h-4 mr-1" />
+              View on Extropian
             </a>
           )}
         </div>

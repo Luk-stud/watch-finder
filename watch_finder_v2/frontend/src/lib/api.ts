@@ -187,6 +187,9 @@ export class ApiService {
   private sessionId: string | null = null;
   private fallbackUrls: string[] = [];
   private hasTestedConnections: boolean = false;
+  
+  // Session persistence key
+  private static readonly SESSION_STORAGE_KEY = 'watch_finder_session_id';
 
   constructor(baseUrl: string = API_BASE_URL) {
     this.baseUrl = baseUrl;
@@ -200,11 +203,52 @@ export class ApiService {
       this.baseUrl = 'http://localhost:5001/api';
     }
     
+    // Load existing session ID from localStorage
+    this.loadSessionId();
+    
     if (shouldDebugLog()) {
       console.log('🔧 API Service initialized with:', {
         baseUrl: this.baseUrl,
-        fallbackUrls: this.fallbackUrls
+        fallbackUrls: this.fallbackUrls,
+        existingSessionId: this.sessionId ? 'loaded' : 'none'
       });
+    }
+  }
+
+  private loadSessionId(): void {
+    try {
+      const storedSessionId = localStorage.getItem(ApiService.SESSION_STORAGE_KEY);
+      if (storedSessionId) {
+        this.sessionId = storedSessionId;
+        if (shouldDebugLog()) {
+          console.log('📱 Loaded session ID from storage:', storedSessionId);
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load session ID from localStorage:', error);
+    }
+  }
+
+  private saveSessionId(sessionId: string): void {
+    try {
+      localStorage.setItem(ApiService.SESSION_STORAGE_KEY, sessionId);
+      if (shouldDebugLog()) {
+        console.log('💾 Saved session ID to storage:', sessionId);
+      }
+    } catch (error) {
+      console.warn('Failed to save session ID to localStorage:', error);
+    }
+  }
+
+  private clearSessionId(): void {
+    try {
+      localStorage.removeItem(ApiService.SESSION_STORAGE_KEY);
+      this.sessionId = null;
+      if (shouldDebugLog()) {
+        console.log('🗑️ Cleared session ID from storage');
+      }
+    } catch (error) {
+      console.warn('Failed to clear session ID from localStorage:', error);
     }
   }
 
@@ -331,7 +375,7 @@ export class ApiService {
     if (data.status === 'error') {
       // Handle session expiration
       if (data.message?.includes('Invalid session') || data.message?.includes('session')) {
-        this.sessionId = null;
+        this.clearSessionId();
         throw new Error('Session expired. Please start a new session.');
       }
       throw new Error(data.message || 'API request failed');
@@ -354,6 +398,10 @@ export class ApiService {
 
   getSessionId(): string | null {
     return this.sessionId;
+  }
+
+  hasActiveSession(): boolean {
+    return this.sessionId !== null;
   }
 
   async checkHealth(): Promise<HealthResponse> {
@@ -389,6 +437,7 @@ export class ApiService {
       // Update session ID from response
       if (sessionData.session_id) {
         this.sessionId = sessionData.session_id;
+        this.saveSessionId(this.sessionId);
       }
       
       // Then get initial recommendations
@@ -505,7 +554,7 @@ export class ApiService {
     }
 
     // Clear the current session ID
-    this.sessionId = null;
+    this.clearSessionId();
 
     // Create a new session
     return this.startSession();

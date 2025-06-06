@@ -135,72 +135,135 @@ class OptimizedExpertLinUCB:
             alpha = 1.0 / len(self.liked_watches)
             self.centroid = (1 - alpha) * self.centroid + alpha * embedding
         
-        # Create an arm for this watch if it doesn't exist
+        # Normalize centroid for proper cosine similarity
+        norm = np.linalg.norm(self.centroid)
+        if norm > 0:
+            self.centroid = self.centroid / norm
+        
+        # Create an arm for this watch if it doesn't exist, using combined context
         if watch_id not in self.arms:
             arm = OptimizedArm(self.dim)
             arm.features = embedding
             self.arms[watch_id] = arm
+            logger.debug(f"🎯 Expert {self.expert_id}: Added arm for watch {watch_id} | Total arms: {len(self.arms)}")
     
-    def update(self, watch_id: int, reward: float, context: np.ndarray) -> None:
-        """Update expert with feedback."""
+    def update(self, watch_id: int, reward: float, watch_embedding: np.ndarray) -> None:
+        """Update expert with feedback using consistent combined context."""
+        # Create combined context for both training and scoring consistency
+        if self.centroid is not None:
+            combined_context = self._combine_context(self.centroid, watch_embedding)
+        else:
+            # If no centroid yet, use the embedding itself (padded/truncated to dim)
+            combined_context = self._prepare_context(watch_embedding)
+        
         # Create arm if it doesn't exist
         if watch_id not in self.arms:
             arm = OptimizedArm(self.dim)
-            arm.features = context
+            arm.features = watch_embedding  # Store original embedding as features
             self.arms[watch_id] = arm
         
-        # Update arm with feedback
+        # Update arm with feedback using combined context
         arm = self.arms[watch_id]
-        arm.update(context, reward)
+        arm.update(combined_context, reward)
         
         # Update liked watches list and centroid if positive feedback
         if reward > 0 and watch_id not in self.liked_watches:
-            self.add_liked_watch(watch_id, context)
+            self.add_liked_watch(watch_id, watch_embedding)
+    
+    def _prepare_context(self, embedding: np.ndarray) -> np.ndarray:
+        """Prepare context when no centroid exists yet."""
+        if len(embedding) >= self.dim:
+            return embedding[:self.dim] / np.linalg.norm(embedding[:self.dim])
+        else:
+            padded = np.zeros(self.dim)
+            padded[:len(embedding)] = embedding
+            norm = np.linalg.norm(padded)
+            return padded / norm if norm > 0 else padded
     
     def _combine_context(self, centroid: np.ndarray, watch_embedding: np.ndarray) -> np.ndarray:
-        """Combine expert centroid with watch embedding using pre-allocated buffer."""
+        """Combine expert centroid with watch embedding creating a unique context."""
         half_dim = self.dim // 2
-        self._context_buffer[:half_dim] = centroid[:half_dim]
-        self._context_buffer[half_dim:] = watch_embedding[half_dim:]
-        return self._context_buffer
+        
+        # Combine expert preferences with watch features
+        # Use expert centroid (text) + watch's unique CLIP features for differentiation
+        expert_text = centroid[:half_dim]
+        watch_text = watch_embedding[:half_dim]  
+        watch_clip = watch_embedding[half_dim:]
+        
+        # Create context that balances expert preference with watch uniqueness
+        # Weighted blend of expert preference and watch text + full watch CLIP
+        blended_text = 0.8 * expert_text + 0.2 * watch_text  # Mostly expert preference
+        
+        # Create NEW array instead of reusing buffer to avoid reference issues
+        combined_context = np.concatenate([blended_text, watch_clip])
+        
+        # Normalize combined context
+        norm = np.linalg.norm(combined_context)
+        if norm > 0:
+            combined_context = combined_context / norm
+        
+        return combined_context
     
-    def batch_get_ucb_scores(self, embeddings: np.ndarray) -> np.ndarray:
-        """Get UCB scores for multiple watches at once."""
+    def get_ucb_score(self, watch_id: int, watch_embedding: np.ndarray) -> float:
+        """Get UCB score for a single watch using its individual arm."""
+        if self.centroid is None:
+            return 0.0
+            
+        # Create combined context (same as used in training)
+        combined_context = self._combine_context(self.centroid, watch_embedding)
+        
+        # Get or create arm for this specific watch
+        if watch_id not in self.arms:
+            arm = OptimizedArm(self.dim)
+            arm.features = watch_embedding
+            
+            # Initialize arm with watch-specific bias for differentiation
+            # Use similarity to expert centroid to give relevant watches higher initial scores
+            np.random.seed(watch_id)  # Deterministic but unique per watch
+            similarity = np.dot(combined_context, self.centroid) if self.centroid is not None else 0.0
+            base_bias = 0.1 * similarity  # Bias based on relevance to expert
+            random_bias = np.random.normal(0, 0.05, self.dim)  # Random component for exploration
+            arm.b = base_bias * combined_context + random_bias
+            
+            self.arms[watch_id] = arm
+        else:
+            arm = self.arms[watch_id]
+        
+        # Use this watch's specific arm for scoring
+        return arm.get_ucb(combined_context, self.alpha)
+    
+    def batch_get_ucb_scores(self, watch_ids: List[int], embeddings: np.ndarray) -> np.ndarray:
+        """Get UCB scores for multiple watches using their individual arms."""
         if self.centroid is None:
             return np.zeros(len(embeddings))
             
-        # Create combined contexts for all embeddings at once
-        half_dim = self.dim // 2
-        batch_size = len(embeddings)
+        scores = np.zeros(len(embeddings))
         
-        # Pre-allocate combined contexts array
-        combined_contexts = np.zeros((batch_size, self.dim))
-        combined_contexts[:, :half_dim] = self.centroid[:half_dim]
-        combined_contexts[:, half_dim:] = embeddings[:, half_dim:]
+        for i, (watch_id, embedding) in enumerate(zip(watch_ids, embeddings)):
+            # Create combined context for this watch
+            combined_context = self._combine_context(self.centroid, embedding)
+            
+            # Get or create arm for this specific watch
+            if watch_id not in self.arms:
+                arm = OptimizedArm(self.dim)
+                arm.features = embedding
+                self.arms[watch_id] = arm
+            else:
+                arm = self.arms[watch_id]
+            
+            # Use this watch's specific arm for scoring
+            scores[i] = arm.get_ucb(combined_context, self.alpha)
         
-        # Normalize combined contexts
-        norms = np.linalg.norm(combined_contexts, axis=1, keepdims=True)
-        norms[norms == 0] = 1
-        combined_contexts /= norms
-        
-        # Get or create a default arm for scoring
-        if not self.arms:
-            default_arm = OptimizedArm(self.dim)
-            default_arm.features = np.zeros(self.dim)
-            return default_arm.batch_ucb(combined_contexts, self.alpha)
-        
-        # Use the most updated arm for scoring
-        latest_arm = max(self.arms.values(), key=lambda a: a.total_pulls)
-        return latest_arm.batch_ucb(combined_contexts, self.alpha)
+        return scores
 
 class OptimizedLinUCBEngine:
     """Optimized Multi-Expert LinUCB engine with performance improvements."""
     def __init__(self, 
-                 dim: int = 100,
-                 alpha: float = 0.15,
+                 dim: int = 50,  # Optimal: Lower dimension with PCA works better
+                 alpha: float = 0.1,  # Optimal: Lower exploration for better convergence
                  batch_size: int = 5,
-                 max_experts: int = 6,
-                 similarity_threshold: float = 0.45,
+                 max_experts: int = 4,  # Optimal: 4 experts for balanced specialization
+                 similarity_threshold: float = 0.7,  # Optimal: Lower threshold for broader learning
                  data_dir: Optional[str] = None):
         """Initialize optimized engine."""
         self.dim = dim
@@ -212,13 +275,12 @@ class OptimizedLinUCBEngine:
         # Expert management
         self.experts: Dict[int, OptimizedExpertLinUCB] = {}
         self.next_expert_id = 0
-        self.expert_centroids: Dict[int, np.ndarray] = {}
         
         # Session management
         self.session_experts: Dict[str, List[int]] = {}
-        self.session_liked_watches: Dict[str, List[int]] = {}
+        self.session_liked_watches: Dict[str, List[int]] = {}  # Used by API for liked watches endpoint
         self.session_embeddings: Dict[str, Dict[int, np.ndarray]] = {}
-        self.session_embedding_weights: Dict[str, Tuple[float, float]] = {}
+        self.session_shown_watches: Dict[str, Set[int]] = {}
         
         # Watch data
         self.watch_data: Dict[int, Dict[str, Any]] = {}
@@ -260,21 +322,36 @@ class OptimizedLinUCBEngine:
             except FileNotFoundError:
                 clip_embeddings_array = np.zeros((len(metadata_list), 512))
             
-            # Initialize PCA for dimensionality reduction
-            if not hasattr(self, '_pca_reducer'):
+            # Initialize PCA for both text and CLIP embeddings
+            if not hasattr(self, '_text_pca_reducer'):
                 # Collect sample embeddings for PCA fitting
                 sample_size = min(1000, len(metadata_list))
-                sample_embeddings = []
+                
+                # Fit PCA for text embeddings
+                text_samples = []
                 for idx in range(sample_size):
                     if idx < len(text_embeddings_array):
-                        sample_embeddings.append(text_embeddings_array[idx])
+                        text_samples.append(text_embeddings_array[idx])
                 
-                if sample_embeddings:
-                    # Fit PCA
-                    self._scaler = StandardScaler()
-                    embeddings_scaled = self._scaler.fit_transform(sample_embeddings)
-                    self._pca_reducer = PCA(n_components=self.dim // 2)
-                    self._pca_reducer.fit(embeddings_scaled)
+                if text_samples:
+                    # Fit text PCA
+                    self._text_scaler = StandardScaler()
+                    text_scaled = self._text_scaler.fit_transform(text_samples)
+                    self._text_pca_reducer = PCA(n_components=self.dim // 2)
+                    self._text_pca_reducer.fit(text_scaled)
+                
+                # Fit PCA for CLIP embeddings
+                clip_samples = []
+                for idx in range(sample_size):
+                    if idx < len(clip_embeddings_array):
+                        clip_samples.append(clip_embeddings_array[idx])
+                
+                if clip_samples:
+                    # Fit CLIP PCA
+                    self._clip_scaler = StandardScaler()
+                    clip_scaled = self._clip_scaler.fit_transform(clip_samples)
+                    self._clip_pca_reducer = PCA(n_components=self.dim // 2)
+                    self._clip_pca_reducer.fit(clip_scaled)
             
             # Process all watches
             for idx, watch_dict in enumerate(metadata_list):
@@ -288,16 +365,16 @@ class OptimizedLinUCBEngine:
                         'index': watch_id
                     }
                     
-                    # Get and reduce text embedding
+                    # Get and reduce text embedding with PCA
                     if idx < len(text_embeddings_array):
                         text_emb = text_embeddings_array[idx]
-                        text_reduced = self._reduce_features(text_emb)
+                        text_reduced = self._reduce_text_features(text_emb)
                         self.watch_text_reduced[watch_id] = text_reduced
                     
-                    # Get and reduce CLIP embedding
+                    # Get and reduce CLIP embedding with PCA
                     if idx < len(clip_embeddings_array):
                         clip_emb = clip_embeddings_array[idx]
-                        clip_reduced = self._reduce_clip_embedding(clip_emb)
+                        clip_reduced = self._reduce_clip_features(clip_emb)
                         self.watch_clip_reduced[watch_id] = clip_reduced
                     
                     self.available_watches.add(watch_id)
@@ -306,14 +383,14 @@ class OptimizedLinUCBEngine:
                     logger.error(f"Error processing watch {idx}: {e}")
                     continue
             
-            logger.info(f"✅ Loaded {len(self.watch_data)} watches with reduced embeddings")
+            logger.info(f"✅ Loaded {len(self.watch_data)} watches with PCA-reduced embeddings")
             
         except Exception as e:
             logger.error(f"❌ Failed to load data: {e}")
             self._create_fallback_data()
     
-    def _reduce_features(self, embedding: np.ndarray) -> np.ndarray:
-        """Reduce embedding dimensionality efficiently."""
+    def _reduce_text_features(self, embedding: np.ndarray) -> np.ndarray:
+        """Reduce text embedding dimensionality with PCA."""
         if embedding is None or len(embedding) == 0:
             return np.zeros(self.dim // 2)
             
@@ -321,37 +398,35 @@ class OptimizedLinUCBEngine:
             return np.pad(embedding, (0, self.dim // 2 - len(embedding)))
         
         try:
-            if hasattr(self, '_pca_reducer'):
-                embedding_scaled = self._scaler.transform(embedding.reshape(1, -1))
-                return self._pca_reducer.transform(embedding_scaled).flatten()
+            if hasattr(self, '_text_pca_reducer'):
+                embedding_scaled = self._text_scaler.transform(embedding.reshape(1, -1))
+                return self._text_pca_reducer.transform(embedding_scaled).flatten()
             else:
                 return embedding[:self.dim // 2]
         except:
             return embedding[:self.dim // 2]
     
-    def _reduce_clip_embedding(self, embedding: np.ndarray) -> np.ndarray:
-        """Reduce CLIP embedding efficiently."""
-        if len(embedding) == self.dim // 2:
-            return embedding
-        elif len(embedding) > self.dim // 2:
-            return embedding[:self.dim // 2]
-        else:
+    def _reduce_clip_features(self, embedding: np.ndarray) -> np.ndarray:
+        """Reduce CLIP embedding dimensionality with PCA."""
+        if embedding is None or len(embedding) == 0:
+            return np.zeros(self.dim // 2)
+            
+        if len(embedding) <= self.dim // 2:
             return np.pad(embedding, (0, self.dim // 2 - len(embedding)))
+        
+        try:
+            if hasattr(self, '_clip_pca_reducer'):
+                embedding_scaled = self._clip_scaler.transform(embedding.reshape(1, -1))
+                return self._clip_pca_reducer.transform(embedding_scaled).flatten()
+            else:
+                return embedding[:self.dim // 2]
+        except:
+            return embedding[:self.dim // 2]
     
-    def create_session(self, session_id: str, clip_weight: float = 0.5, text_weight: float = 0.5) -> None:
+    def create_session(self, session_id: str) -> None:
         """Initialize a new session with pre-computed embeddings."""
-        # Normalize weights
-        total = clip_weight + text_weight
-        if total > 0:
-            clip_weight /= total
-            text_weight /= total
-        else:
-            clip_weight = text_weight = 0.5
         
-        # Store session weights
-        self.session_embedding_weights[session_id] = (clip_weight, text_weight)
-        
-        # Pre-compute weighted embeddings for all watches
+        # Pre-compute concatenated embeddings for all watches (no user scaling)
         self.session_embeddings[session_id] = {}
         
         # Process in batches to manage memory
@@ -364,14 +439,13 @@ class OptimizedLinUCBEngine:
                 text_emb = self.watch_text_reduced[watch_id]
                 clip_emb = self.watch_clip_reduced.get(watch_id, np.zeros(self.dim // 2))
                 
-                # Create weighted combination
-                text_norm = text_emb / (np.linalg.norm(text_emb) + 1e-8)
-                clip_norm = clip_emb / (np.linalg.norm(clip_emb) + 1e-8)
+                # Simply concatenate without user scaling - let LinUCB learn the weights
+                combined = np.concatenate([text_emb, clip_emb])
                 
-                combined = np.concatenate([
-                    text_weight * text_norm,
-                    clip_weight * clip_norm
-                ])
+                # Normalize the final combined embedding
+                combined_norm = np.linalg.norm(combined)
+                if combined_norm > 0:
+                    combined = combined / combined_norm
                 
                 # Store normalized combined embedding
                 self.session_embeddings[session_id][watch_id] = combined
@@ -379,27 +453,26 @@ class OptimizedLinUCBEngine:
         # Initialize session tracking
         self.session_experts[session_id] = []
         self.session_liked_watches[session_id] = []
+        self.session_shown_watches[session_id] = set()  # Initialize empty set for shown watches
         
         logger.info(f"✅ Created session {session_id} with {len(self.session_embeddings[session_id])} pre-computed embeddings")
     
     def get_recommendations(self,
                           session_id: str,
-                          context: np.ndarray,
                           exclude_ids: Optional[Set[int]] = None) -> List[Dict[str, Any]]:
         """Get recommendations using pre-computed embeddings."""
         exclude_ids = exclude_ids or set()
         
         # Ensure session exists
         if session_id not in self.session_embeddings:
-            clip_weight = context[0] if len(context) > 0 else 0.5
-            text_weight = context[1] if len(context) > 1 else 0.5
-            self.create_session(session_id, clip_weight, text_weight)
+            self.create_session(session_id)
         
-        # Get available watches
-        available_watches = [
-            watch_id for watch_id in self.available_watches 
-            if watch_id not in exclude_ids
-        ]
+        # Exclude session-specific shown watches and provided excludes
+        session_shown_watches = self.session_shown_watches.setdefault(session_id, set())
+        all_excludes = exclude_ids | session_shown_watches
+        
+        # Get available watches with deduplication by brand+model
+        available_watches = self._get_unique_watches(all_excludes)
         
         if not available_watches:
             return []
@@ -413,10 +486,18 @@ class OptimizedLinUCBEngine:
                 size=min(self.batch_size, len(available_watches)),
                 replace=False
             ).tolist()
+            
+            # Track the watches we're actually showing
+            session_shown_watches.update(selected_watches)
+            
+            logger.info(f"🎲 Session {session_id}: No experts yet, using random exploration ({len(selected_watches)} watches)")
             return [self._format_recommendation(watch_id, 0.5, "Random") for watch_id in selected_watches]
         
         # Get all scores from all experts
         all_scores = []  # List of (watch_id, score, expert_id)
+        expert_best_scores = {}  # Track best score per expert
+        
+        logger.info(f"🤔 Session {session_id}: Querying {len(session_experts)} experts for {len(available_watches)} watches")
         
         # Process available watches in batches
         batch_size = 1000
@@ -425,6 +506,7 @@ class OptimizedLinUCBEngine:
                 continue
                 
             expert = self.experts[expert_id]
+            expert_scores = []  # Scores for this expert
             
             # Process watches in batches
             for i in range(0, len(available_watches), batch_size):
@@ -437,57 +519,73 @@ class OptimizedLinUCBEngine:
                 ])
                 
                 # Get scores for this batch
-                batch_scores = expert.batch_get_ucb_scores(batch_embeddings)
+                batch_scores = expert.batch_get_ucb_scores(batch_ids, batch_embeddings)
                 
-                # Add scores with expert ID
+                # Store scores for this expert
+                for watch_id, score in zip(batch_ids, batch_scores):
+                    expert_scores.append((watch_id, score, expert_id))
+                
+                # Add to global scores
                 all_scores.extend((watch_id, score, expert_id) 
                                 for watch_id, score in zip(batch_ids, batch_scores))
+            
+            # Track best scores per expert for balanced selection
+            if expert_scores:
+                expert_scores.sort(key=lambda x: x[1], reverse=True)
+                expert_best_scores[expert_id] = expert_scores[:3]  # Top 3 from each expert
         
-        # Sort all scores from all experts
-        all_scores.sort(key=lambda x: x[1], reverse=True)
+        # BALANCED EXPERT RECOMMENDATION STRATEGY
+        final_recommendations = []
+        seen_watches = set()
+        
+        # Phase 1: Ensure each expert gets at least 1 recommendation (balanced representation)
+        for expert_id in session_experts:
+            if expert_id in expert_best_scores and len(final_recommendations) < self.batch_size:
+                for watch_id, score, exp_id in expert_best_scores[expert_id]:
+                    if watch_id not in seen_watches:
+                        seen_watches.add(watch_id)
+                        session_expert_number = session_experts.index(expert_id) + 1
+                        final_recommendations.append(
+                            self._format_recommendation(watch_id, score, f"expert_{session_expert_number}")
+                        )
+                        break  # Only take 1 per expert in phase 1
+        
+        # Phase 2: Fill remaining slots with best overall scores
+        if len(final_recommendations) < self.batch_size:
+            # Sort all remaining scores
+            all_scores.sort(key=lambda x: x[1], reverse=True)
+            
+            for watch_id, score, expert_id in all_scores:
+                if watch_id not in seen_watches and len(final_recommendations) < self.batch_size:
+                    seen_watches.add(watch_id)
+                    session_expert_number = session_experts.index(expert_id) + 1
+                    final_recommendations.append(
+                        self._format_recommendation(watch_id, score, f"expert_{session_expert_number}")
+                    )
         
         # Debug: Log expert ID mapping for session
         if session_experts:
             expert_mapping = {expert_id: i+1 for i, expert_id in enumerate(session_experts)}
             logger.debug(f"Session {session_id} expert mapping: {expert_mapping}")
+            
+            # Log expert contributions
+            expert_contributions = {}
+            for rec in final_recommendations:
+                alg = rec.get('algorithm', 'unknown')
+                expert_contributions[alg] = expert_contributions.get(alg, 0) + 1
+            logger.info(f"📊 Expert contributions: {expert_contributions}")
         
-        # Take top scores while avoiding duplicates
-        seen_watches = set()
-        final_recommendations = []
-        
-        for watch_id, score, expert_id in all_scores:
-            if watch_id not in seen_watches and len(final_recommendations) < self.batch_size:
-                seen_watches.add(watch_id)
-                # Convert global expert ID to session-specific expert number (1-6)
-                session_expert_number = session_experts.index(expert_id) + 1
-                final_recommendations.append(
-                    self._format_recommendation(watch_id, score, f"expert_{session_expert_number}")
-                )
-        
-        # Fill remaining slots with random recommendations if needed
-        if len(final_recommendations) < self.batch_size:
-            remaining_watches = [w for w in available_watches if w not in seen_watches]
-            if remaining_watches:
-                additional = np.random.choice(
-                    remaining_watches,
-                    size=min(self.batch_size - len(final_recommendations), len(remaining_watches)),
-                    replace=False
-                ).tolist()
-                
-                for watch_id in additional:
-                    final_recommendations.append(
-                        self._format_recommendation(watch_id, 0.4, "random_fill")
-                    )
+        # Track all watches we're actually showing
+        shown_watch_ids = [rec.get('watch_id') for rec in final_recommendations if rec.get('watch_id') is not None]
+        session_shown_watches.update(shown_watch_ids)
         
         return final_recommendations
     
-    def update(self, session_id: str, watch_id: int, reward: float, context: np.ndarray) -> None:
+    def update(self, session_id: str, watch_id: int, reward: float) -> None:
         """Update system with feedback."""
         # Ensure session exists
         if session_id not in self.session_embeddings:
-            clip_weight = context[0] if len(context) > 0 else 0.5
-            text_weight = context[1] if len(context) > 1 else 0.5
-            self.create_session(session_id, clip_weight, text_weight)
+            self.create_session(session_id)
         
         # Get pre-computed embedding
         if watch_id not in self.session_embeddings[session_id]:
@@ -511,6 +609,7 @@ class OptimizedLinUCBEngine:
                 expert = self.experts[expert_id]
                 expert.add_liked_watch(watch_id, watch_embedding)
                 expert.update(watch_id, reward, watch_embedding)
+                logger.info(f"👤 Session {session_id}: First expert {expert_id} initialized with watch {watch_id}")
             return
         
         # Update existing experts or create new one
@@ -533,6 +632,7 @@ class OptimizedLinUCBEngine:
                 expert = self.experts[best_expert_id]
                 expert.add_liked_watch(watch_id, watch_embedding)
                 expert.update(watch_id, reward, watch_embedding)
+                logger.info(f"✅ Expert {best_expert_id}: Added watch {watch_id} (similarity: {best_similarity:.3f} ≥ {self.similarity_threshold}) | Liked watches: {len(expert.liked_watches)}")
             elif len(session_experts) < self.max_experts:
                 # Create new expert
                 expert_id = self._create_new_expert()
@@ -540,23 +640,70 @@ class OptimizedLinUCBEngine:
                 expert = self.experts[expert_id]
                 expert.add_liked_watch(watch_id, watch_embedding)
                 expert.update(watch_id, reward, watch_embedding)
+                logger.info(f"🆕 Expert {expert_id}: New expert created for watch {watch_id} (similarity: {best_similarity:.3f} < {self.similarity_threshold})")
             else:
                 # Add to best expert if at limit
                 expert = self.experts[best_expert_id]
                 expert.add_liked_watch(watch_id, watch_embedding)
                 expert.update(watch_id, reward, watch_embedding)
+                logger.info(f"🔄 Expert {best_expert_id}: Added watch {watch_id} (at max experts, best similarity: {best_similarity:.3f}) | Liked watches: {len(expert.liked_watches)}")
         else:
             # Update all experts with negative feedback
+            negative_count = 0
             for expert_id in session_experts:
                 if expert_id in self.experts:
                     expert = self.experts[expert_id]
                     expert.update(watch_id, reward, watch_embedding)
+                    negative_count += 1
+            logger.info(f"👎 Negative feedback: Updated {negative_count} experts with watch {watch_id} (reward: {reward})")
+    
+    def _get_unique_watches(self, exclude_ids: Set[int]) -> List[int]:
+        """Get unique watches by complete signature, excluding specified IDs."""
+        seen_signatures = set()
+        unique_watches = []
+        
+        for watch_id in self.available_watches:
+            if watch_id in exclude_ids:
+                continue
+                
+            watch = self.watch_data.get(watch_id, {})
+            specs = watch.get('specs', {})
+            
+            # Create comprehensive signature to distinguish true duplicates from variations
+            signature_parts = []
+            
+            # Core identity
+            brand = watch.get('brand', '').strip().lower()
+            model = watch.get('model', '').strip().lower()
+            signature_parts.append(f"brand:{brand}")
+            signature_parts.append(f"model:{model}")
+            
+            # Key differentiating specs (only add if not empty/null)
+            for key in ['dial_color', 'case_material', 'movement', 'case_size', 'strap_material']:
+                value = specs.get(key, '').strip().lower()
+                if value and value != '-' and value != 'null':
+                    signature_parts.append(f"{key}:{value}")
+            
+            # Product URL as final differentiator (same watch shouldn't have different URLs)
+            product_url = watch.get('product_url', '').strip().lower()
+            if product_url:
+                signature_parts.append(f"url:{product_url}")
+            
+            # Create complete signature
+            full_signature = "|".join(signature_parts)
+            
+            if full_signature not in seen_signatures:
+                seen_signatures.add(full_signature)
+                unique_watches.append(watch_id)
+        
+        return unique_watches
     
     def _create_new_expert(self) -> int:
         """Create a new expert and return its ID."""
         expert_id = self.next_expert_id
         self.next_expert_id += 1
         self.experts[expert_id] = OptimizedExpertLinUCB(expert_id, self.dim, self.alpha)
+        logger.info(f"🧠 Created Expert {expert_id} | Total experts: {len(self.experts)}/{self.max_experts}")
         return expert_id
     
     def _format_recommendation(self, watch_id: int, confidence: float, algorithm: str) -> Dict[str, Any]:
@@ -607,7 +754,6 @@ class OptimizedLinUCBEngine:
         logger.info("🛑 Shutting down OptimizedLinUCBEngine...")
         # Clear memory
         self.experts.clear()
-        self.expert_centroids.clear()
         self.watch_data.clear()
         self.available_watches.clear()
         self.session_embeddings.clear()
