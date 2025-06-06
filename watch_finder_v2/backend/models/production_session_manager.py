@@ -347,7 +347,8 @@ class ProductionSessionManager:
         except Exception as e:
             logger.error(f"❌ Error updating feedback for watch {watch_id} in session {session_id}: {e}")
             logger.error(f"❌ Error details: {traceback.format_exc()}")
-            return False
+            # Re-raise the exception instead of returning False so the API can handle it properly
+            raise Exception(f"Failed to process feedback for watch {watch_id}: {str(e)}")
     
     def _validate_and_get_session(self, session_id: str) -> Optional[Session]:
         """Validate session exists and is not expired."""
