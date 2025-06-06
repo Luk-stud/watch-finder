@@ -56,7 +56,23 @@ logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app)
+
+# Enhanced CORS configuration for production
+CORS(app, 
+     origins=[
+         'https://watchrecomender.netlify.app',
+         'https://www.watchrecomender.netlify.app',
+         'https://deploy-preview-*--watchrecomender.netlify.app',
+         'http://localhost:3000',
+         'http://localhost:5173',
+         'http://localhost:8080',
+         'http://127.0.0.1:3000',
+         'http://127.0.0.1:5173',
+         'http://127.0.0.1:8080'
+     ],
+     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+     allow_headers=['Content-Type', 'Authorization', 'X-Session-ID'],
+     supports_credentials=True)
 
 # Handle proxy headers if behind reverse proxy
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
@@ -159,6 +175,10 @@ def service_unavailable(error):
 def before_request():
     """Log requests and validate system state."""
     g.start_time = datetime.now()
+    
+    # Always allow OPTIONS requests (CORS preflight)
+    if request.method == 'OPTIONS':
+        return
     
     # Allow health, ready, and status endpoints even during initialization
     allowed_endpoints = ['health', 'ready', 'status']
@@ -663,6 +683,51 @@ def get_liked_watches():
             'error_code': 'LIKED_WATCHES_FAILED'
         }), 500
 
+@app.route('/api/filter-options', methods=['GET'])
+def get_filter_options():
+    """Get available filter options from watch metadata."""
+    if not engine:
+        return jsonify({
+            'status': 'error',
+            'message': 'System not initialized'
+        }), 503
+    
+    try:
+        # Extract unique values from watch metadata
+        brands = set()
+        case_materials = set()
+        
+        for watch_id, watch_data in engine.watch_data.items():
+            # Extract brand
+            if 'brand' in watch_data and watch_data['brand']:
+                brands.add(watch_data['brand'])
+            
+            # Extract specs
+            specs = watch_data.get('specs', {})
+            
+            # Case material
+            if 'case_material' in specs and specs['case_material']:
+                case_materials.add(specs['case_material'])
+        
+        # Convert sets to sorted lists with reasonable limits
+        filter_options = {
+            'brands': sorted(list(brands))[:50],  # Limit to top 50 brands
+            'caseMaterials': sorted(list(case_materials)),
+        }
+        
+        logger.info(f"✅ Generated filter options: {len(filter_options['brands'])} brands, {len(filter_options['caseMaterials'])} materials")
+        
+        return jsonify(filter_options)
+        
+    except Exception as e:
+        logger.error(f"❌ Error getting filter options: {e}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'status': 'error',
+            'message': 'Failed to get filter options',
+            'error_code': 'FILTER_OPTIONS_FAILED'
+        }), 500
+
 @app.route('/api/session/reset', methods=['POST'])
 def reset_session():
     """Reset current session - creates new session and cleans up old one."""
@@ -781,4 +846,9 @@ if __name__ == '__main__':
     except Exception as e:
         logger.error(f"❌ Server error: {e}")
     finally:
-        shutdown_system() 
+        shutdown_system()
+
+# Initialize system when running in production (Railway/Gunicorn)
+else:
+    logger.info("🚀 Production mode detected - starting background initialization...")
+    initialize_system_background() 
