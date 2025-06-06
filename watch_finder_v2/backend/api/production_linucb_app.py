@@ -902,5 +902,8 @@ if __name__ == '__main__':
 
 # Initialize system when running in production (Railway/Gunicorn)
 else:
-    logger.info("🚀 Production mode detected - starting background initialization...")
-    initialize_system_background() 
+    logger.info("🚀 Production mode detected - initializing system synchronously...")
+    if initialize_system():
+        logger.info("✅ Production system initialization completed")
+    else:
+        logger.error("❌ Production system initialization failed") 
