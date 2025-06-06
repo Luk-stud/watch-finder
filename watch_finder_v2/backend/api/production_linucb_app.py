@@ -499,9 +499,9 @@ def submit_feedback():
         
         # Log expert stats after feedback
         if expert_stats:
-            logger.info(f"📊 Expert stats after feedback - Global pulls: {expert_stats['global']['total_pulls']}, " +
-                       f"Positive feedback rate: {expert_stats['global']['feedback_rate']:.2%}, " +
-                       f"Active experts: {expert_stats['num_experts']}/{expert_stats['max_experts']}")
+            logger.info(f"📊 Expert stats after feedback - Total experts: {expert_stats.get('total_experts', 0)}, " +
+                       f"Total sessions: {expert_stats.get('total_sessions', 0)}, " +
+                       f"Avg likes per expert: {expert_stats.get('avg_likes_per_expert', 0):.1f}")
         
         return jsonify({
             'status': 'success',
