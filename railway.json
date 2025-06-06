@@ -1,11 +1,11 @@
 {
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "pip install --no-cache-dir -r requirements.txt"
+    "buildCommand": "cd watch_finder_v2/backend && pip install --no-cache-dir -r requirements.txt"
   },
   "deploy": {
     "numReplicas": 1,
     "restartPolicyType": "ON_FAILURE",
-    "startCommand": "python backend/api/modern_app.py"
+    "startCommand": "cd watch_finder_v2/backend && python api/fast_start.py"
   }
 } 
