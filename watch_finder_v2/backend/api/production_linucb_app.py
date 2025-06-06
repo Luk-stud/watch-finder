@@ -122,7 +122,8 @@ def initialize_system() -> bool:
             linucb_engine=engine
         )
         
-        logger.info("✅ Optimized LinUCB engine and session manager initialized successfully")
+        logger.info("✅ Fast LinUCB engine and session manager initialized successfully")
+        logger.info(f"🔍 Global state check - engine: {engine is not None}, session_manager: {session_manager is not None}")
         return True
         
     except Exception as e:
@@ -181,15 +182,21 @@ def before_request():
     if request.method == 'OPTIONS':
         return
     
-    # Allow health, ready, and status endpoints even during initialization
-    allowed_endpoints = ['health', 'ready', 'status']
+    # Allow health, ready, status, and debug endpoints even during initialization
+    allowed_endpoints = ['health', 'ready', 'status', 'debug_info']
     
     # Check if system is initialized for other endpoints
     if not session_manager and request.endpoint not in allowed_endpoints:
+        logger.warning(f"⚠️ Blocking request to {request.endpoint} - session_manager is None")
         return jsonify({
             'status': 'error',
             'message': 'System still initializing, please try again in a moment',
-            'error_code': 'SYSTEM_INITIALIZING'
+            'error_code': 'SYSTEM_INITIALIZING',
+            'debug': {
+                'session_manager_exists': session_manager is not None,
+                'engine_exists': engine is not None,
+                'endpoint': request.endpoint
+            }
         }), 503
 
 @app.after_request
@@ -847,18 +854,21 @@ def initialize_system_background():
     import time
     
     def init_worker():
+        global session_manager, engine
         start_time = time.time()
         try:
             logger.info("🔄 Starting background system initialization...")
             if initialize_system():
                 elapsed = time.time() - start_time
                 logger.info(f"✅ Background system initialization completed successfully in {elapsed:.1f}s")
+                logger.info(f"🔍 Post-init state - engine: {engine is not None}, session_manager: {session_manager is not None}")
             else:
                 elapsed = time.time() - start_time
                 logger.error(f"❌ Background system initialization failed after {elapsed:.1f}s")
         except Exception as e:
             elapsed = time.time() - start_time
             logger.error(f"❌ Background initialization error after {elapsed:.1f}s: {e}")
+            logger.error(traceback.format_exc())
     
     # Start initialization in background thread
     init_thread = threading.Thread(target=init_worker, daemon=True)
