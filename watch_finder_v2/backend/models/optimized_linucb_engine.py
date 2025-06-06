@@ -109,18 +109,23 @@ class SimplifiedExpert:
 class OptimizedLinUCBEngine:
     """Optimized Multi-Expert LinUCB engine with performance improvements."""
     def __init__(self, 
-                 dim: int = 50,  # Optimal: Lower dimension with PCA works better
+                 text_dim: int = 100,  # Target text PCA dimensions
+                 clip_dim: int = 100,  # Target CLIP PCA dimensions  
                  alpha: float = 0.1,  # Optimal: Lower exploration for better convergence
                  batch_size: int = 5,
                  max_experts: int = 4,  # Optimal: 4 experts for balanced specialization
-                 similarity_threshold: float = 0.7,  # Optimal: Lower threshold for broader learning
+                 similarity_threshold: float = 0.95,  # Very high threshold for testing dress watch similarity
                  data_dir: Optional[str] = None):
         """Initialize optimized engine."""
-        self.dim = dim
+        self.text_dim = text_dim
+        self.clip_dim = clip_dim
         self.alpha = alpha
         self.batch_size = batch_size
         self.max_experts = max_experts
         self.similarity_threshold = similarity_threshold
+        
+        # Dimension will be set after loading data
+        self.dim = None  # Auto-detected from actual embeddings
         
         # Expert management
         self.experts: Dict[int, SimplifiedExpert] = {}
@@ -145,7 +150,7 @@ class OptimizedLinUCBEngine:
         )
         self._load_data()
         
-        logger.info(f"✅ Simplified LinUCB engine initialized with {len(self.watch_data)} watches")
+        logger.info(f"✅ Simplified LinUCB engine initialized with {len(self.watch_data)} watches (embedding dim: {self.dim})")
     
     def _load_data(self) -> None:
         """Load and preprocess watch data with detailed logging."""
@@ -197,7 +202,7 @@ class OptimizedLinUCBEngine:
             # Initialize PCA for both text and CLIP embeddings (ONLY DONE ONCE)
             pca_start = time.time()
             if not hasattr(self, '_text_pca_reducer'):
-                logger.info(f"🔬 Initializing PCA reducers (target dimension: {self.dim // 2} each)...")
+                logger.info(f"🔬 Initializing PCA reducers (text: {self.text_dim}D, CLIP: {self.clip_dim}D)...")
                 
                 # Collect sample embeddings for PCA fitting
                 sample_size = min(1000, len(metadata_list))
@@ -216,7 +221,7 @@ class OptimizedLinUCBEngine:
                     # Fit text PCA
                     self._text_scaler = StandardScaler()
                     text_scaled = self._text_scaler.fit_transform(text_samples)
-                    self._text_pca_reducer = PCA(n_components=self.dim // 2)
+                    self._text_pca_reducer = PCA(n_components=self.text_dim)
                     self._text_pca_reducer.fit(text_scaled)
                     explained_var = sum(self._text_pca_reducer.explained_variance_ratio_)
                     logger.info(f"✅ Text PCA fitted in {time.time() - pca_text_start:.2f}s (explained variance: {explained_var:.3f})")
@@ -234,7 +239,7 @@ class OptimizedLinUCBEngine:
                     # Fit CLIP PCA
                     self._clip_scaler = StandardScaler()
                     clip_scaled = self._clip_scaler.fit_transform(clip_samples)
-                    self._clip_pca_reducer = PCA(n_components=self.dim // 2)
+                    self._clip_pca_reducer = PCA(n_components=self.clip_dim)
                     self._clip_pca_reducer.fit(clip_scaled)
                     explained_var = sum(self._clip_pca_reducer.explained_variance_ratio_)
                     logger.info(f"✅ CLIP PCA fitted in {time.time() - pca_clip_start:.2f}s (explained variance: {explained_var:.3f})")
@@ -242,6 +247,24 @@ class OptimizedLinUCBEngine:
                 logger.info(f"✅ PCA initialization complete in {time.time() - pca_start:.2f}s")
             else:
                 logger.info("✅ PCA reducers already initialized (skipping)")
+            
+            # Auto-detect actual embedding dimensions from first watch
+            logger.info("🔍 Auto-detecting embedding dimensions...")
+            if len(metadata_list) > 0:
+                # Process first watch to get actual dimensions
+                text_emb = text_embeddings_array[0] if len(text_embeddings_array) > 0 else None
+                clip_emb = clip_embeddings_array[0] if len(clip_embeddings_array) > 0 else None
+                
+                text_reduced = self._reduce_text_features(text_emb) if text_emb is not None else np.zeros(self.text_dim)
+                clip_reduced = self._reduce_clip_features(clip_emb) if clip_emb is not None else np.zeros(self.clip_dim)
+                
+                # Set actual dimension from concatenated embedding
+                self.dim = len(text_reduced) + len(clip_reduced)
+                logger.info(f"📏 Auto-detected embedding dimension: {len(text_reduced)}D text + {len(clip_reduced)}D CLIP = {self.dim}D total")
+            else:
+                # Fallback if no data
+                self.dim = self.text_dim + self.clip_dim
+                logger.warning(f"⚠️ No data found, using fallback dimension: {self.dim}D")
             
             # Process all watches
             logger.info("🔄 Processing all watches with PCA reduction...")
@@ -327,36 +350,36 @@ class OptimizedLinUCBEngine:
     def _reduce_text_features(self, embedding: np.ndarray) -> np.ndarray:
         """Reduce text embedding dimensionality with PCA."""
         if embedding is None or len(embedding) == 0:
-            return np.zeros(self.dim // 2)
+            return np.zeros(self.text_dim)
             
-        if len(embedding) <= self.dim // 2:
-            return np.pad(embedding, (0, self.dim // 2 - len(embedding)))
+        if len(embedding) <= self.text_dim:
+            return np.pad(embedding, (0, self.text_dim - len(embedding)))
         
         try:
             if hasattr(self, '_text_pca_reducer'):
                 embedding_scaled = self._text_scaler.transform(embedding.reshape(1, -1))
                 return self._text_pca_reducer.transform(embedding_scaled).flatten()
             else:
-                return embedding[:self.dim // 2]
+                return embedding[:self.text_dim]
         except:
-            return embedding[:self.dim // 2]
+            return embedding[:self.text_dim]
     
     def _reduce_clip_features(self, embedding: np.ndarray) -> np.ndarray:
         """Reduce CLIP embedding dimensionality with PCA."""
         if embedding is None or len(embedding) == 0:
-            return np.zeros(self.dim // 2)
+            return np.zeros(self.clip_dim)
             
-        if len(embedding) <= self.dim // 2:
-            return np.pad(embedding, (0, self.dim // 2 - len(embedding)))
+        if len(embedding) <= self.clip_dim:
+            return np.pad(embedding, (0, self.clip_dim - len(embedding)))
         
         try:
             if hasattr(self, '_clip_pca_reducer'):
                 embedding_scaled = self._clip_scaler.transform(embedding.reshape(1, -1))
                 return self._clip_pca_reducer.transform(embedding_scaled).flatten()
             else:
-                return embedding[:self.dim // 2]
+                return embedding[:self.clip_dim]
         except:
-            return embedding[:self.dim // 2]
+            return embedding[:self.clip_dim]
     
     def create_session(self, session_id: str) -> None:
         """Initialize a new session with pre-computed embeddings."""
@@ -376,7 +399,7 @@ class OptimizedLinUCBEngine:
             batch_ids = watch_ids[i:i + batch_size]
             for watch_id in batch_ids:
                 text_emb = self.watch_text_reduced[watch_id]
-                clip_emb = self.watch_clip_reduced.get(watch_id, np.zeros(self.dim // 2))
+                clip_emb = self.watch_clip_reduced.get(watch_id, np.zeros(self.clip_dim))
                 
                 # Simply concatenate without user scaling - let LinUCB learn the weights
                 combined = np.concatenate([text_emb, clip_emb])
@@ -589,6 +612,7 @@ class OptimizedLinUCBEngine:
                 expert.add_liked_watch(watch_id, watch_embedding)
                 expert.update(watch_embedding, reward)
                 logger.info(f"🆕 Expert {expert_id}: New expert created for watch {watch_id} (similarity: {best_similarity:.3f} < {self.similarity_threshold})")
+                logger.info(f"📊 DEBUG: All expert similarities for watch {watch_id}: {[(exp_id, np.dot(watch_embedding, self.experts[exp_id].centroid) if self.experts[exp_id].centroid is not None else 0.0) for exp_id in session_experts[:-1]]}")
             else:
                 # Add to best expert if at limit
                 expert = self.experts[best_expert_id]

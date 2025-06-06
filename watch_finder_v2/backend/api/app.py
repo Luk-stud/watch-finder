@@ -78,7 +78,8 @@ def initialize():
         # Initialize optimized engine
         logger.info("⚙️ Creating OptimizedLinUCBEngine instance...")
         engine = OptimizedLinUCBEngine(
-            dim=100,  # 50D for text + 50D for CLIP
+            text_dim=100,  # 100D for text embeddings  
+            clip_dim=100,  # 100D for CLIP embeddings
             alpha=0.15,
             batch_size=5,
             data_dir='data'
