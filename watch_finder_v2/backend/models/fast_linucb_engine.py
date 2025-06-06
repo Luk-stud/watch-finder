@@ -31,6 +31,10 @@ class SimplifiedExpert:
         self.b = np.zeros(dim)
         self.theta = np.zeros(dim)
         
+        # Cache matrix inversion for performance
+        self.A_inv = np.identity(dim)
+        self.A_inv_valid = True
+        
         # Track liked watches for this expert
         self.liked_watches = []
         
@@ -50,6 +54,9 @@ class SimplifiedExpert:
         self.A += np.outer(context, context)
         self.b += reward * context
         
+        # Invalidate cached inverse
+        self.A_inv_valid = False
+        
         # Recompute theta (parameter estimate)
         try:
             self.theta = np.linalg.solve(self.A, self.b)
@@ -60,10 +67,19 @@ class SimplifiedExpert:
         """Calculate Upper Confidence Bound score for a single context."""
         context = context.reshape(-1)
         
-        # Calculate confidence interval
+        # Update cached inverse if needed
+        if not self.A_inv_valid:
+            try:
+                self.A_inv = np.linalg.inv(self.A)
+                self.A_inv_valid = True
+            except np.linalg.LinAlgError:
+                confidence = 1.0
+                predicted_reward = np.dot(self.theta, context)
+                return predicted_reward + self.alpha * confidence
+        
+        # Calculate confidence interval using cached inverse
         try:
-            A_inv = np.linalg.inv(self.A)
-            confidence = np.sqrt(np.dot(context, np.dot(A_inv, context)))
+            confidence = np.sqrt(np.dot(context, np.dot(self.A_inv, context)))
         except np.linalg.LinAlgError:
             confidence = 1.0
         
@@ -76,19 +92,26 @@ class SimplifiedExpert:
         if len(contexts.shape) == 1:
             contexts = contexts.reshape(1, -1)
         
-        # Vectorized computation
+        # Update cached inverse if needed
+        if not self.A_inv_valid:
+            try:
+                self.A_inv = np.linalg.inv(self.A)
+                self.A_inv_valid = True
+            except np.linalg.LinAlgError:
+                # Fallback to individual computation
+                return np.array([self.get_ucb_score(ctx) for ctx in contexts])
+        
+        # Vectorized computation using cached inverse
         try:
-            A_inv = np.linalg.inv(self.A)
-            
             # Predicted rewards
             predicted_rewards = np.dot(contexts, self.theta)
             
-            # Confidence intervals
-            confidence_terms = np.sqrt(np.sum(contexts * np.dot(contexts, A_inv), axis=1))
+            # Confidence intervals using cached A_inv
+            confidence_terms = np.sqrt(np.sum(contexts * np.dot(contexts, self.A_inv), axis=1))
             
             return predicted_rewards + self.alpha * confidence_terms
             
-        except np.linalg.LinAlgError:
+        except Exception:
             # Fallback to individual computation
             return np.array([self.get_ucb_score(ctx) for ctx in contexts])
 
@@ -222,48 +245,40 @@ class FastLinUCBEngine:
             logger.info(f"🎲 Session {session_id}: No experts yet, using random exploration ({len(selected_watches)} watches)")
             return [self._format_recommendation(watch_id, 0.5, "Random") for watch_id in selected_watches]
         
-        # Get all scores from all experts - much faster with precomputed embeddings!
-        all_scores = []
-        expert_best_scores = {}
-        
+        # OPTIMIZED APPROACH: Process all watches at once for all experts
         logger.info(f"🤔 Session {session_id}: Querying {len(session_experts)} experts for {len(available_watches)} watches")
         
         ucb_start = time.time()
         
-        # Process available watches in batches
-        batch_size = 1000
+        # Get all embeddings at once
+        all_embeddings = np.array([
+            self.session_embeddings[session_id][watch_id]
+            for watch_id in available_watches
+        ])
+        
+        # Get scores from all experts efficiently
+        all_scores = []
+        expert_best_scores = {}
+        
         for expert_id in session_experts:
             if expert_id not in self.experts:
                 continue
                 
             expert = self.experts[expert_id]
-            expert_scores = []
             
-            # Process watches in batches
-            for i in range(0, len(available_watches), batch_size):
-                batch_ids = available_watches[i:i + batch_size]
-                
-                # Get precomputed embeddings for this batch
-                batch_embeddings = np.array([
-                    self.session_embeddings[session_id][watch_id]
-                    for watch_id in batch_ids
-                ])
-                
-                # Get scores for this batch
-                batch_scores = expert.batch_get_ucb_scores(batch_embeddings)
-                
-                # Store scores for this expert
-                for watch_id, score in zip(batch_ids, batch_scores):
-                    expert_scores.append((watch_id, score, expert_id))
-                
-                # Add to global scores
-                all_scores.extend((watch_id, score, expert_id) 
-                                for watch_id, score in zip(batch_ids, batch_scores))
+            # Get all scores for this expert at once
+            expert_scores_values = expert.batch_get_ucb_scores(all_embeddings)
+            
+            # Create scored list for this expert
+            expert_scores = [(available_watches[i], expert_scores_values[i], expert_id) 
+                           for i in range(len(available_watches))]
+            
+            # Add to global scores
+            all_scores.extend(expert_scores)
             
             # Track best scores per expert for balanced selection
-            if expert_scores:
-                expert_scores.sort(key=lambda x: x[1], reverse=True)
-                expert_best_scores[expert_id] = expert_scores[:3]
+            expert_scores.sort(key=lambda x: x[1], reverse=True)
+            expert_best_scores[expert_id] = expert_scores[:3]
         
         # BALANCED EXPERT RECOMMENDATION STRATEGY
         final_recommendations = []
