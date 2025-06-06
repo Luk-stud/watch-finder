@@ -36,7 +36,10 @@ const Index = () => {
     initializeSession();
   }, []);
 
-  const initializeSession = async () => {
+  const initializeSession = async (retryCount = 0) => {
+    const maxRetries = 5;
+    const baseDelay = 2000; // 2 seconds
+    
     try {
       setIsLoading(true);
       setError(null);
@@ -83,9 +86,37 @@ const Index = () => {
       }
     } catch (err) {
       console.error('Failed to initialize session:', err);
-      setError(err instanceof Error ? err.message : 'Failed to connect to backend');
+      
+      // Check if it's a system initialization error and we can retry
+      const errorMessage = err instanceof Error ? err.message : 'Failed to connect to backend';
+      const isInitializingError = errorMessage.includes('SYSTEM_INITIALIZING') || 
+                                  errorMessage.includes('System still initializing');
+      
+      if (isInitializingError && retryCount < maxRetries) {
+        const delay = baseDelay * Math.pow(1.5, retryCount); // Exponential backoff
+        console.log(`🔄 System still initializing, retrying in ${delay/1000}s... (attempt ${retryCount + 1}/${maxRetries})`);
+        
+        // Show helpful message while retrying
+        setError(`Backend is starting up, retrying in ${Math.round(delay/1000)}s... (${retryCount + 1}/${maxRetries})`);
+        
+        setTimeout(() => {
+          initializeSession(retryCount + 1);
+        }, delay);
+        
+        return; // Don't set final error state yet
+      }
+      
+      // Set final error if we've exhausted retries or it's a different error
+      if (isInitializingError) {
+        setError('Backend is taking longer than expected to start. Please try refreshing the page in a moment.');
+      } else {
+        setError(errorMessage);
+      }
     } finally {
-      setIsLoading(false);
+      // Only set loading to false if we're not retrying
+      if (retryCount === 0 || error !== null) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -212,13 +243,27 @@ const Index = () => {
 
   // Loading state (only show full screen loader when no watches)
   if (isLoading && currentWatches.length === 0) {
+    const isRetrying = error && error.includes('retrying');
+    
     return (
       <div className="flex-viewport bg-background">
         <div className="flex items-center justify-center h-full">
-          <div className="text-center">
+          <div className="text-center max-w-md px-6">
             <Loader2 className="w-8 h-8 mx-auto mb-4 animate-spin text-primary" />
-            <h2 className="text-lg font-medium text-foreground">Loading recommendations...</h2>
-            <p className="text-sm text-muted-foreground mt-2">Preparing your personalized watches</p>
+            <h2 className="text-lg font-medium text-foreground mb-2">
+              {isRetrying ? 'Starting backend...' : 'Loading recommendations...'}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {isRetrying 
+                ? 'The AI system is initializing. This may take a few moments on first startup.'
+                : 'Preparing your personalized watches'
+              }
+            </p>
+            {isRetrying && (
+              <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                <p className="text-sm text-blue-700 dark:text-blue-300">{error}</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
