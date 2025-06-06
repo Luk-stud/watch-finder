@@ -258,7 +258,6 @@ class ProductionSessionManager:
             # Get recommendations
             recommendations = self.engine.get_recommendations(
                 session_id=session_id,
-                context=np.array([0.5, 0.5]),  # Equal weights initially
                 exclude_ids=set()
             )
             
@@ -303,7 +302,6 @@ class ProductionSessionManager:
         
         recommendations = self.engine.get_recommendations(
             session_id=session_id,
-            context=np.array([0.5, 0.5]),  # Use stored weights from engine
             exclude_ids=exclude_ids
         )
         
@@ -335,8 +333,7 @@ class ProductionSessionManager:
             self.engine.update(
                 session_id=session_id,
                 watch_id=watch_id,
-                reward=1.0 if liked else 0.0,
-                context=np.array([0.5, 0.5])  # Use stored weights from engine
+                reward=1.0 if liked else 0.0
             )
             return True
         except Exception as e:
