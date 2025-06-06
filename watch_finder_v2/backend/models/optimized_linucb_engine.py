@@ -280,6 +280,7 @@ class OptimizedLinUCBEngine:
         self.session_experts: Dict[str, List[int]] = {}
         self.session_liked_watches: Dict[str, List[int]] = {}  # Used by API for liked watches endpoint
         self.session_embeddings: Dict[str, Dict[int, np.ndarray]] = {}
+        self.session_embedding_weights: Dict[str, Tuple[float, float]] = {}
         self.session_shown_watches: Dict[str, Set[int]] = {}
         
         # Watch data
@@ -302,58 +303,109 @@ class OptimizedLinUCBEngine:
         logger.info(f"✅ Optimized LinUCB engine initialized with {len(self.watch_data)} watches")
     
     def _load_data(self) -> None:
-        """Load and preprocess watch data."""
+        """Load and preprocess watch data with detailed logging."""
+        import time
+        import traceback
+        
+        total_start = time.time()
+        logger.info("🔄 Starting data loading process...")
+        
         try:
             # Load watch metadata
+            logger.info("📖 Loading watch metadata...")
+            load_start = time.time()
             metadata_path = os.path.join(self.data_dir, 'watch_text_metadata.pkl')
             with open(metadata_path, 'rb') as f:
                 metadata_list = pickle.load(f)
+            logger.info(f"✅ Loaded {len(metadata_list)} watch metadata entries in {time.time() - load_start:.2f}s")
             
             # Load text embeddings
+            logger.info("📖 Loading text embeddings...")
+            load_start = time.time()
             text_embeddings_path = os.path.join(self.data_dir, 'watch_text_embeddings.pkl')
             with open(text_embeddings_path, 'rb') as f:
                 text_embeddings_array = pickle.load(f)
+            text_shape = text_embeddings_array.shape if hasattr(text_embeddings_array, 'shape') else f"List of {len(text_embeddings_array)}"
+            logger.info(f"✅ Loaded text embeddings {text_shape} in {time.time() - load_start:.2f}s")
             
             # Load CLIP embeddings
+            logger.info("📖 Loading CLIP embeddings...")
+            load_start = time.time()
             clip_embeddings_path = os.path.join(self.data_dir, 'watch_clip_embeddings.pkl')
             try:
                 with open(clip_embeddings_path, 'rb') as f:
                     clip_embeddings_array = pickle.load(f)
+                clip_shape = clip_embeddings_array.shape if hasattr(clip_embeddings_array, 'shape') else f"List of {len(clip_embeddings_array)}"
+                logger.info(f"✅ Loaded CLIP embeddings {clip_shape} in {time.time() - load_start:.2f}s")
             except FileNotFoundError:
                 clip_embeddings_array = np.zeros((len(metadata_list), 512))
+                logger.warning("⚠️ CLIP embeddings not found, using zeros")
             
-            # Initialize PCA for both text and CLIP embeddings
+            # Log original embedding sizes
+            if len(text_embeddings_array) > 0:
+                sample_text_size = len(text_embeddings_array[0]) if hasattr(text_embeddings_array[0], '__len__') else "scalar"
+                logger.info(f"📏 Sample text embedding size: {sample_text_size}")
+            if len(clip_embeddings_array) > 0:
+                sample_clip_size = len(clip_embeddings_array[0]) if hasattr(clip_embeddings_array[0], '__len__') else "scalar"
+                logger.info(f"📏 Sample CLIP embedding size: {sample_clip_size}")
+            
+            # Initialize PCA for both text and CLIP embeddings (ONLY DONE ONCE)
+            pca_start = time.time()
             if not hasattr(self, '_text_pca_reducer'):
+                logger.info(f"🔬 Initializing PCA reducers (target dimension: {self.dim // 2} each)...")
+                
                 # Collect sample embeddings for PCA fitting
                 sample_size = min(1000, len(metadata_list))
+                logger.info(f"📊 Using {sample_size} samples for PCA fitting")
                 
                 # Fit PCA for text embeddings
+                logger.info("🔬 Fitting PCA for text embeddings...")
+                pca_text_start = time.time()
                 text_samples = []
                 for idx in range(sample_size):
                     if idx < len(text_embeddings_array):
                         text_samples.append(text_embeddings_array[idx])
                 
                 if text_samples:
+                    logger.info(f"📏 Text samples shape: {np.array(text_samples).shape}")
                     # Fit text PCA
                     self._text_scaler = StandardScaler()
                     text_scaled = self._text_scaler.fit_transform(text_samples)
                     self._text_pca_reducer = PCA(n_components=self.dim // 2)
                     self._text_pca_reducer.fit(text_scaled)
+                    explained_var = sum(self._text_pca_reducer.explained_variance_ratio_)
+                    logger.info(f"✅ Text PCA fitted in {time.time() - pca_text_start:.2f}s (explained variance: {explained_var:.3f})")
                 
                 # Fit PCA for CLIP embeddings
+                logger.info("🔬 Fitting PCA for CLIP embeddings...")
+                pca_clip_start = time.time()
                 clip_samples = []
                 for idx in range(sample_size):
                     if idx < len(clip_embeddings_array):
                         clip_samples.append(clip_embeddings_array[idx])
                 
                 if clip_samples:
+                    logger.info(f"📏 CLIP samples shape: {np.array(clip_samples).shape}")
                     # Fit CLIP PCA
                     self._clip_scaler = StandardScaler()
                     clip_scaled = self._clip_scaler.fit_transform(clip_samples)
                     self._clip_pca_reducer = PCA(n_components=self.dim // 2)
                     self._clip_pca_reducer.fit(clip_scaled)
+                    explained_var = sum(self._clip_pca_reducer.explained_variance_ratio_)
+                    logger.info(f"✅ CLIP PCA fitted in {time.time() - pca_clip_start:.2f}s (explained variance: {explained_var:.3f})")
+                
+                logger.info(f"✅ PCA initialization complete in {time.time() - pca_start:.2f}s")
+            else:
+                logger.info("✅ PCA reducers already initialized (skipping)")
             
             # Process all watches
+            logger.info("🔄 Processing all watches with PCA reduction...")
+            process_start = time.time()
+            
+            processed_count = 0
+            text_reduction_times = []
+            clip_reduction_times = []
+            
             for idx, watch_dict in enumerate(metadata_list):
                 try:
                     watch_id = watch_dict.get('index', idx)
@@ -367,26 +419,64 @@ class OptimizedLinUCBEngine:
                     
                     # Get and reduce text embedding with PCA
                     if idx < len(text_embeddings_array):
+                        text_start = time.time()
                         text_emb = text_embeddings_array[idx]
                         text_reduced = self._reduce_text_features(text_emb)
+                        text_reduction_times.append(time.time() - text_start)
+                        
                         self.watch_text_reduced[watch_id] = text_reduced
+                        
+                        # Log sizes for first few watches
+                        if idx < 3:
+                            orig_size = len(text_emb) if hasattr(text_emb, '__len__') else "scalar"
+                            reduced_size = len(text_reduced) if hasattr(text_reduced, '__len__') else "scalar"
+                            logger.info(f"📏 Watch {watch_id}: Text {orig_size} → {reduced_size}")
                     
                     # Get and reduce CLIP embedding with PCA
                     if idx < len(clip_embeddings_array):
+                        clip_start = time.time()
                         clip_emb = clip_embeddings_array[idx]
                         clip_reduced = self._reduce_clip_features(clip_emb)
+                        clip_reduction_times.append(time.time() - clip_start)
+                        
                         self.watch_clip_reduced[watch_id] = clip_reduced
+                        
+                        # Log sizes for first few watches
+                        if idx < 3:
+                            orig_size = len(clip_emb) if hasattr(clip_emb, '__len__') else "scalar"
+                            reduced_size = len(clip_reduced) if hasattr(clip_reduced, '__len__') else "scalar"
+                            logger.info(f"📏 Watch {watch_id}: CLIP {orig_size} → {reduced_size}")
                     
                     self.available_watches.add(watch_id)
+                    processed_count += 1
+                    
+                    # Log progress every 100 watches
+                    if processed_count % 100 == 0:
+                        elapsed = time.time() - process_start
+                        avg_text_time = np.mean(text_reduction_times[-100:]) if text_reduction_times else 0
+                        avg_clip_time = np.mean(clip_reduction_times[-100:]) if clip_reduction_times else 0
+                        logger.info(f"🔄 Processed {processed_count}/{len(metadata_list)} watches ({elapsed:.1f}s, avg: {(avg_text_time + avg_clip_time)*1000:.1f}ms/watch)")
                     
                 except Exception as e:
                     logger.error(f"Error processing watch {idx}: {e}")
                     continue
             
+            # Final timing statistics
+            total_time = time.time() - total_start
+            process_time = time.time() - process_start
+            avg_text_time = np.mean(text_reduction_times) if text_reduction_times else 0
+            avg_clip_time = np.mean(clip_reduction_times) if clip_reduction_times else 0
+            
+            logger.info(f"📊 Processing complete:")
+            logger.info(f"   • Total time: {total_time:.2f}s")
+            logger.info(f"   • Processing time: {process_time:.2f}s")
+            logger.info(f"   • Avg text reduction: {avg_text_time*1000:.1f}ms")
+            logger.info(f"   • Avg CLIP reduction: {avg_clip_time*1000:.1f}ms")
             logger.info(f"✅ Loaded {len(self.watch_data)} watches with PCA-reduced embeddings")
             
         except Exception as e:
             logger.error(f"❌ Failed to load data: {e}")
+            logger.error(f"❌ Error details: {traceback.format_exc()}")
             self._create_fallback_data()
     
     def _reduce_text_features(self, embedding: np.ndarray) -> np.ndarray:
@@ -425,6 +515,9 @@ class OptimizedLinUCBEngine:
     
     def create_session(self, session_id: str) -> None:
         """Initialize a new session with pre-computed embeddings."""
+        import time
+        session_start = time.time()
+        logger.info(f"🔄 Creating session {session_id}...")
         
         # Pre-compute concatenated embeddings for all watches (no user scaling)
         self.session_embeddings[session_id] = {}
@@ -432,6 +525,7 @@ class OptimizedLinUCBEngine:
         # Process in batches to manage memory
         batch_size = 1000
         watch_ids = list(self.available_watches)
+        logger.info(f"📊 Processing {len(watch_ids)} watches for session embedding precomputation...")
         
         for i in range(0, len(watch_ids), batch_size):
             batch_ids = watch_ids[i:i + batch_size]
@@ -455,7 +549,8 @@ class OptimizedLinUCBEngine:
         self.session_liked_watches[session_id] = []
         self.session_shown_watches[session_id] = set()  # Initialize empty set for shown watches
         
-        logger.info(f"✅ Created session {session_id} with {len(self.session_embeddings[session_id])} pre-computed embeddings")
+        session_time = time.time() - session_start
+        logger.info(f"✅ Created session {session_id} with {len(self.session_embeddings[session_id])} pre-computed embeddings in {session_time:.2f}s")
     
     def get_recommendations(self,
                           session_id: str,
@@ -498,6 +593,10 @@ class OptimizedLinUCBEngine:
         expert_best_scores = {}  # Track best score per expert
         
         logger.info(f"🤔 Session {session_id}: Querying {len(session_experts)} experts for {len(available_watches)} watches")
+        
+        # Add timing for UCB calculations
+        import time
+        ucb_start = time.time()
         
         # Process available watches in batches
         batch_size = 1000
@@ -562,6 +661,10 @@ class OptimizedLinUCBEngine:
                     final_recommendations.append(
                         self._format_recommendation(watch_id, score, f"expert_{session_expert_number}")
                     )
+        
+        # Log UCB timing
+        ucb_time = time.time() - ucb_start
+        logger.info(f"⏱️ UCB calculations completed in {ucb_time:.2f}s for {len(available_watches)} watches")
         
         # Debug: Log expert ID mapping for session
         if session_experts:

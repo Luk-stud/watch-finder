@@ -70,15 +70,24 @@ engine = None
 
 def initialize():
     global engine
+    logger.info("🚀 Starting engine initialization...")
+    import time
+    init_start = time.time()
+    
     try:
         # Initialize optimized engine
+        logger.info("⚙️ Creating OptimizedLinUCBEngine instance...")
         engine = OptimizedLinUCBEngine(
             dim=100,  # 50D for text + 50D for CLIP
             alpha=0.15,
             batch_size=5,
             data_dir='data'
         )
-        logger.info("✅ Optimized LinUCB engine initialized successfully")
+        
+        init_time = time.time() - init_start
+        logger.info(f"✅ Optimized LinUCB engine initialized successfully in {init_time:.2f}s")
+        logger.info(f"📊 Engine stats: {len(engine.watch_data)} watches, {len(engine.available_watches)} available")
+        
     except Exception as e:
         logger.error(f"❌ Failed to initialize engine: {e}")
         logger.error(traceback.format_exc())
