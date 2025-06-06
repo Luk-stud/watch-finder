@@ -49,20 +49,22 @@ allowed_origins = [
     "https://deploy-preview-*--watchrecomender.netlify.app",
     "http://localhost:3000",  # Local development
     "http://localhost:5173",  # Vite dev server
+    "http://localhost:8080",  # Vite dev server alt port
     "http://127.0.0.1:3000",
-    "http://127.0.0.1:5173"
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8080"
 ]
 
 if ENVIRONMENT == 'production':
     # Production CORS - restrict to specific domains
     NETLIFY_DOMAIN = os.getenv('NETLIFY_DOMAIN', 'watchrecomender.netlify.app')
     CORS(app, origins=allowed_origins, methods=['GET', 'POST', 'OPTIONS'], 
-         allow_headers=['Content-Type', 'Authorization'], supports_credentials=True)
+         allow_headers=['Content-Type', 'Authorization', 'X-Session-ID'], supports_credentials=True)
     logger.info(f"🔒 Production CORS enabled for: {allowed_origins}")
 else:
     # Development CORS - allow all origins plus specific ones
     CORS(app, origins=["*"] + allowed_origins, methods=['GET', 'POST', 'OPTIONS'], 
-         allow_headers=['Content-Type', 'Authorization'], supports_credentials=True)
+         allow_headers=['Content-Type', 'Authorization', 'X-Session-ID'], supports_credentials=True)
     logger.info("🔓 Development CORS enabled (all origins + specific domains)")
 
 # Global engine instance
@@ -275,27 +277,50 @@ def get_recommendations():
         filtered_recommendations = apply_user_filters(recommendations, filter_preferences)
         
         logger.info(f"🔍 After user filters: {len(filtered_recommendations)}")
+        logger.info(f"🔍 Filter preferences applied: {filter_preferences}")
         
         # If filtering resulted in too few recommendations, relax filters and try again
+        # But be more conservative - don't remove important user preferences like size/color
         if len(filtered_recommendations) < 3 and len(recommendations) > 3:
-            logger.info(f"⚠️  Only {len(filtered_recommendations)} recommendations after filtering, relaxing filters...")
+            logger.info(f"⚠️  Only {len(filtered_recommendations)} recommendations after filtering, considering fallbacks...")
             
-            # First fallback: remove some filter restrictions
+            # Check if user has specific size or aesthetic preferences - if so, respect them
+            has_size_prefs = any(key in filter_preferences for key in ['minDiameter', 'maxDiameter', 'minThickness', 'maxThickness'])
+            has_aesthetic_prefs = any(key in filter_preferences for key in ['dialColors', 'caseMaterials'])
+            
+            # First fallback: only remove non-essential filters (keep size, color, type preferences)
             relaxed_preferences = filter_preferences.copy()
             
-            # Remove diameter restrictions if they exist
-            if 'minDiameter' in relaxed_preferences:
-                del relaxed_preferences['minDiameter']
-            if 'maxDiameter' in relaxed_preferences:
-                del relaxed_preferences['maxDiameter']
+            # Only remove water resistance and complications first
+            if 'waterResistance' in relaxed_preferences:
+                del relaxed_preferences['waterResistance']
+                logger.info("🔧 Removing water resistance filter")
+            if 'limitedEdition' in relaxed_preferences:
+                del relaxed_preferences['limitedEdition']
+                logger.info("🔧 Removing limited edition filter")
+            if 'vintage' in relaxed_preferences:
+                del relaxed_preferences['vintage']
+                logger.info("🔧 Removing vintage filter")
             
-            # Try with relaxed filters
+            # Try with slightly relaxed filters
             filtered_recommendations = apply_user_filters(recommendations, relaxed_preferences)
-            logger.info(f"🔍 After relaxed filters: {len(filtered_recommendations)}")
+            logger.info(f"🔍 After removing secondary filters: {len(filtered_recommendations)}")
             
-            # If still too few, try with even more relaxed filters
-            if len(filtered_recommendations) < 3:
-                # Second fallback: only keep brand and price filters
+            # Second fallback: only if still very few results AND user doesn't have strong size/color preferences
+            if len(filtered_recommendations) < 2 and not (has_size_prefs or has_aesthetic_prefs):
+                logger.info("🔧 User has no strong size/color preferences, removing diameter restrictions")
+                # Remove diameter restrictions if they exist
+                if 'minDiameter' in relaxed_preferences:
+                    del relaxed_preferences['minDiameter']
+                if 'maxDiameter' in relaxed_preferences:
+                    del relaxed_preferences['maxDiameter']
+                
+                filtered_recommendations = apply_user_filters(recommendations, relaxed_preferences)
+                logger.info(f"🔍 After removing diameter filters: {len(filtered_recommendations)}")
+            
+            # Final fallback: only if we have almost no results
+            if len(filtered_recommendations) < 1:
+                # Third fallback: only keep brand and price filters
                 minimal_preferences = {}
                 if 'brands' in filter_preferences:
                     minimal_preferences['brands'] = filter_preferences['brands']
@@ -303,11 +328,11 @@ def get_recommendations():
                     minimal_preferences['priceRange'] = filter_preferences['priceRange']
                 
                 filtered_recommendations = apply_user_filters(recommendations, minimal_preferences)
-                logger.info(f"🔍 After minimal filters: {len(filtered_recommendations)}")
+                logger.info(f"🔍 After minimal filters (brand/price only): {len(filtered_recommendations)}")
                 
                 # Final fallback: no filters if still insufficient
-                if len(filtered_recommendations) < 3:
-                    logger.info("📢 Using unfiltered recommendations - user filters too restrictive")
+                if len(filtered_recommendations) < 1:
+                    logger.warning("📢 Using unfiltered recommendations - user filters too restrictive")
                     filtered_recommendations = recommendations
         
         # Ensure we always have some recommendations
@@ -342,14 +367,27 @@ def get_recommendations():
 def apply_user_filters(recommendations, filter_preferences):
     """Apply user-defined filters to recommendations."""
     if not filter_preferences:
+        logger.info("🔍 No filter preferences provided, returning all recommendations")
         return recommendations
     
+    logger.info(f"🔍 Applying filters: {filter_preferences}")
     filtered = []
+    rejected_count = 0
     
     for watch in recommendations:
         if should_include_watch(watch, filter_preferences):
             filtered.append(watch)
+        else:
+            rejected_count += 1
+            # Log a few examples of rejected watches for debugging
+            if rejected_count <= 3:
+                specs = watch.get('specs', {})
+                diameter = specs.get('diameter_mm', 'Unknown')
+                dial_color = specs.get('dial_color', 'Unknown')
+                brand = watch.get('brand', 'Unknown')
+                logger.info(f"🚫 Rejected: {brand} - diameter: {diameter}mm, color: {dial_color}")
     
+    logger.info(f"🔍 Filter results: {len(filtered)} accepted, {rejected_count} rejected")
     return filtered
 
 @app.route('/api/feedback', methods=['POST'])
@@ -432,6 +470,37 @@ def get_debug_stats():
         
     except Exception as e:
         logger.error(f"❌ Error getting debug stats: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/session/<session_id>', methods=['DELETE'])
+def delete_session(session_id):
+    """Delete a specific session."""
+    try:
+        if engine is None:
+            return jsonify({'error': 'Engine not initialized'}), 500
+        
+        # Remove session data
+        removed = False
+        if session_id in engine.session_liked_watches:
+            del engine.session_liked_watches[session_id]
+            removed = True
+        if session_id in engine.session_experts:
+            del engine.session_experts[session_id]
+            removed = True
+        if session_id in engine.session_embeddings:
+            del engine.session_embeddings[session_id]
+            removed = True
+        
+        logger.info(f"🗑️ Deleted session {session_id} (existed: {removed})")
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Session {session_id} deleted',
+            'existed': removed
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error deleting session: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/session/<session_id>/status', methods=['GET'])

@@ -36,7 +36,7 @@ from config import (
 
 # Import production session manager
 try:
-    from models.optimized_linucb_engine import OptimizedLinUCBEngine
+    from models.fast_linucb_engine import FastLinUCBEngine
     from models.production_session_manager import ProductionSessionManager
 except ImportError as e:
     print(f"❌ Import error: {e}")
@@ -79,7 +79,7 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # Global state
 session_manager: Optional[ProductionSessionManager] = None
-engine: Optional[OptimizedLinUCBEngine] = None
+engine: Optional[FastLinUCBEngine] = None
 
 def sanitize_watch_for_json(watch: Dict[str, Any]) -> Dict[str, Any]:
     """Sanitize watch data for JSON serialization."""
@@ -104,11 +104,12 @@ def initialize_system() -> bool:
         # Create logs directory
         os.makedirs('logs', exist_ok=True)
         
-        # Initialize optimized engine with reduced dimension
-        engine = OptimizedLinUCBEngine(
-            dim=100,  # 50D for text + 50D for CLIP
+        # Initialize FAST engine with precomputed embeddings!
+        engine = FastLinUCBEngine(
             alpha=0.15,
             batch_size=5,
+            max_experts=4,
+            similarity_threshold=0.95,
             data_dir='data'
         )
         
