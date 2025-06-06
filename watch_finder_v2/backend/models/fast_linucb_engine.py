@@ -138,7 +138,6 @@ class FastLinUCBEngine:
         self.dim = 200
         
         # Session management
-        self.session_embeddings = {}
         self.session_experts = {}
         self.session_liked_watches = {}
         self.session_shown_watches = {}
@@ -195,19 +194,12 @@ class FastLinUCBEngine:
     
     def create_session(self, session_id: str) -> None:
         """Initialize a new session - much faster now!"""
-        logger.info(f"🔄 Creating session {session_id}...")
-        session_start = time.time()
-        
-        # Just copy the precomputed embeddings - no computation needed!
-        self.session_embeddings[session_id] = self.final_embeddings.copy()
-        
-        # Initialize session tracking
+        # Initialize session tracking only - no need to copy embeddings!
         self.session_experts[session_id] = []
         self.session_liked_watches[session_id] = []
         self.session_shown_watches[session_id] = set()
         
-        session_time = time.time() - session_start
-        logger.info(f"✅ Created session {session_id} with {len(self.session_embeddings[session_id])} embeddings in {session_time:.3f}s")
+        logger.info(f"✅ Created session {session_id} (fast init - no copying)")
     
     def get_recommendations(self,
                           session_id: str,
@@ -216,7 +208,7 @@ class FastLinUCBEngine:
         exclude_ids = exclude_ids or set()
         
         # Ensure session exists
-        if session_id not in self.session_embeddings:
+        if session_id not in self.session_experts:
             self.create_session(session_id)
         
         # Exclude session-specific shown watches and provided excludes
@@ -252,7 +244,7 @@ class FastLinUCBEngine:
         
         # Get all embeddings at once
         all_embeddings = np.array([
-            self.session_embeddings[session_id][watch_id]
+            self.final_embeddings[watch_id]
             for watch_id in available_watches
         ])
         
@@ -321,15 +313,15 @@ class FastLinUCBEngine:
     def update(self, session_id: str, watch_id: int, reward: float) -> None:
         """Update system with feedback."""
         # Ensure session exists
-        if session_id not in self.session_embeddings:
+        if session_id not in self.session_experts:
             self.create_session(session_id)
         
         # Get precomputed embedding
-        if watch_id not in self.session_embeddings[session_id]:
-            logger.warning(f"Watch {watch_id} not found in session embeddings")
+        if watch_id not in self.final_embeddings:
+            logger.warning(f"Watch {watch_id} not found in embeddings")
             return
         
-        watch_embedding = self.session_embeddings[session_id][watch_id]
+        watch_embedding = self.final_embeddings[watch_id]
         
         # Track likes
         if reward > 0:
@@ -367,8 +359,8 @@ class FastLinUCBEngine:
             # Calculate similarity with expert's liked watches
             similarities = []
             for liked_watch_id in expert.liked_watches:
-                if liked_watch_id in self.session_embeddings[session_id]:
-                    liked_embedding = self.session_embeddings[session_id][liked_watch_id]
+                if liked_watch_id in self.final_embeddings:
+                    liked_embedding = self.final_embeddings[liked_watch_id]
                     similarity = np.dot(watch_embedding, liked_embedding)
                     similarities.append(similarity)
             
@@ -445,7 +437,6 @@ class FastLinUCBEngine:
     def shutdown(self) -> None:
         """Clean shutdown."""
         logger.info("🔄 Shutting down FastLinUCBEngine...")
-        self.session_embeddings.clear()
         self.session_experts.clear()
         self.experts.clear()
         logger.info("✅ FastLinUCBEngine shutdown complete")
