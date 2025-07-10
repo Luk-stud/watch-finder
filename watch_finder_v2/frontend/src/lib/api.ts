@@ -131,7 +131,7 @@ export interface ModernWatch {
   algorithm?: string;
   confidence?: number;
   score?: number;
-  watch_id?: number;
+  watch_id?: string | number;
 }
 
 export interface SessionResponse {
@@ -460,7 +460,7 @@ export class ApiService {
     }
   }
 
-  async getRecommendations(filterPreferences?: any, excludeIds?: number[]): Promise<RecommendationsResponse> {
+  async getRecommendations(filterPreferences?: any, excludeIds?: (string | number)[]): Promise<RecommendationsResponse> {
     if (shouldDebugLog()) {
       console.log('🎯 Getting recommendations with filter preferences:', filterPreferences, 'excluding:', excludeIds);
     }

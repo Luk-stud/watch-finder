@@ -20,7 +20,7 @@ const Index = () => {
   const [error, setError] = useState<string | null>(null);
   
   // Track all watches that have been seen to exclude them from future recommendations
-  const [seenWatchIds, setSeenWatchIds] = useState<Set<number>>(new Set());
+  const [seenWatchIds, setSeenWatchIds] = useState<Set<string | number>>(new Set());
   
   // Simple overlay state
   const [selectedWatch, setSelectedWatch] = useState<Watch | null>(null);
