@@ -4,8 +4,10 @@
     "buildCommand": "cd watch_finder_v2/backend && pip install --no-cache-dir -r requirements.txt"
   },
   "deploy": {
-    "numReplicas": 1,
+    "numReplicas": 2,
     "restartPolicyType": "ON_FAILURE",
-    "startCommand": "cd watch_finder_v2/backend && python api/fast_start.py"
+    "startCommand": "cd watch_finder_v2/backend && gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 120 --preload api.simple_sgd_app:app",
+    "healthcheckPath": "/api/health",
+    "healthcheckTimeout": 300
   }
 } 

@@ -1,1 +1,0 @@
-web: cd watch_finder_v2/backend && python api/production_linucb_app.py 
