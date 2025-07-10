@@ -225,8 +225,13 @@ def submit_feedback():
         # Convert feedback to reward signal
         reward = 1.0 if feedback == 'like' else 0.0
         
-        # Update engine
-        engine.update(session_id, int(watch_id), reward)
+        # Update engine - support both numeric and string IDs
+        try:
+            watch_id_key = int(watch_id)
+        except (ValueError, TypeError):
+            watch_id_key = str(watch_id)
+
+        engine.update(session_id, watch_id_key, reward)
         
         # Get session stats
         stats = engine.get_stats()
