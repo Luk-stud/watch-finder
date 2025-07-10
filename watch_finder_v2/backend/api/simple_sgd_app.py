@@ -160,9 +160,19 @@ def get_recommendations():
         logger.error(f"❌ Error details: {traceback.format_exc()}")
         return jsonify({'error': 'Failed to get recommendations'}), 500
 
-@app.route('/api/feedback', methods=['POST'])
+@app.route('/api/feedback', methods=['POST', 'OPTIONS'])
 def submit_feedback():
     """Submit user feedback (like/dislike) for a watch."""
+    
+    # Handle CORS preflight requests
+    if request.method == 'OPTIONS':
+        logger.info("🔍 Received OPTIONS request (CORS preflight)")
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        response.headers.add('Access-Control-Allow-Methods', 'POST')
+        return response
+    
     try:
         if engine is None:
             return jsonify({'error': 'Engine not initialized'}), 500
@@ -171,14 +181,23 @@ def submit_feedback():
         logger.info(f"🔍 Raw request data: {request.get_data()}")
         logger.info(f"🔍 Request headers: {dict(request.headers)}")
         logger.info(f"🔍 Request content type: {request.content_type}")
+        logger.info(f"🔍 Request method: {request.method}")
         
-        data = request.get_json()
-        logger.info(f"🔍 Parsed JSON data: {data}")
+        # Try to parse JSON data
+        try:
+            data = request.get_json()
+            logger.info(f"🔍 Parsed JSON data: {data}")
+        except Exception as json_error:
+            logger.error(f"❌ JSON parsing error: {json_error}")
+            return jsonify({'error': f'Invalid JSON: {str(json_error)}'}), 400
         
         # Check if data is None or empty
         if not data:
             logger.error("❌ No JSON data received")
             return jsonify({'error': 'No JSON data received'}), 400
+        
+        # Log all keys in the data
+        logger.info(f"🔍 Data keys: {list(data.keys())}")
         
         session_id = data.get('session_id')
         watch_id = data.get('watch_id')
