@@ -1,6 +1,6 @@
 [build]
   builder = "NIXPACKS"
-  buildCommand = "pip install -r requirements.txt && mkdir -p images && cp -r ../../production_scrape_20250601_175426/images/* images/"
+  buildCommand = "pip install -r requirements.txt"
 
 [deploy]
   startCommand = "gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 120 --preload api.simple_sgd_app:app"
