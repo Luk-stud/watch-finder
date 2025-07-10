@@ -117,6 +117,9 @@ class SimpleSgdEngine:
             
             self.available_watches = set(watch_ids)
             
+            # Build brand+model grouping for variant exclusion
+            self._build_brand_model_groups()
+            
             total_time = time.time() - total_start
             file_size = os.path.getsize(precomputed_path) / (1024 * 1024)
             
@@ -124,12 +127,57 @@ class SimpleSgdEngine:
             logger.info(f"   • File size: {file_size:.1f}MB")
             logger.info(f"   • Items matrix: {self.items_matrix.shape}")
             logger.info(f"   • Available watches: {len(self.available_watches)}")
+            logger.info(f"   • Brand+model groups: {len(self.brand_model_groups)}")
             logger.info(f"   • StandardScaler fitted on all items")
             
         except Exception as e:
             logger.error(f"❌ Failed to initialize: {e}")
             logger.error(f"❌ Error details: {traceback.format_exc()}")
             self._create_fallback_data()
+
+    def _build_brand_model_groups(self) -> None:
+        """Build mapping of brand+model combinations to watch IDs for variant exclusion."""
+        self.brand_model_groups = {}
+        self.watch_to_brand_model = {}
+        
+        for watch_id, watch_data in self.watch_data.items():
+            brand = watch_data.get('brand', '').strip()
+            model = watch_data.get('model', '').strip()
+            
+            # Create a unique key for brand+model combination
+            brand_model_key = f"{brand}|{model}"
+            
+            if brand_model_key not in self.brand_model_groups:
+                self.brand_model_groups[brand_model_key] = set()
+            
+            self.brand_model_groups[brand_model_key].add(watch_id)
+            self.watch_to_brand_model[watch_id] = brand_model_key
+        
+        # Log some statistics about the grouping
+        group_sizes = [len(watch_ids) for watch_ids in self.brand_model_groups.values()]
+        multi_variant_groups = [size for size in group_sizes if size > 1]
+        
+        logger.info(f"📊 Brand+model grouping statistics:")
+        logger.info(f"   • Total unique brand+model combinations: {len(self.brand_model_groups)}")
+        logger.info(f"   • Groups with multiple variants: {len(multi_variant_groups)}")
+        if multi_variant_groups:
+            logger.info(f"   • Average variants per group: {sum(multi_variant_groups)/len(multi_variant_groups):.1f}")
+            logger.info(f"   • Max variants in a group: {max(multi_variant_groups)}")
+        
+        # Show some examples of multi-variant groups
+        multi_variant_examples = [(key, len(watch_ids)) for key, watch_ids in self.brand_model_groups.items() if len(watch_ids) > 1][:3]
+        if multi_variant_examples:
+            logger.info(f"   • Example multi-variant groups:")
+            for key, count in multi_variant_examples:
+                brand, model = key.split('|', 1)
+                logger.info(f"     - {brand} {model}: {count} variants")
+
+    def _get_similar_watches(self, watch_id) -> Set[int]:
+        """Get all watches with the same brand+model as the given watch."""
+        brand_model_key = self.watch_to_brand_model.get(watch_id)
+        if brand_model_key:
+            return self.brand_model_groups.get(brand_model_key, set())
+        return {watch_id}  # If not found, just return the watch itself
 
     def _create_blank_model(self) -> SGDClassifier:
         """Creates a new SGDClassifier with our desired default settings."""
@@ -185,7 +233,14 @@ class SimpleSgdEngine:
 
         model = self.session_models[session_id]
         shown = self.session_shown_watches[session_id]
-        all_excludes = exclude_ids | shown
+        
+        # Expand shown watches to include all variants of the same brand+model
+        expanded_shown = set()
+        for watch_id in shown:
+            similar_watches = self._get_similar_watches(watch_id)
+            expanded_shown.update(similar_watches)
+        
+        all_excludes = exclude_ids | expanded_shown
 
         # Build list of candidate indices
         candidates = [
@@ -229,7 +284,11 @@ class SimpleSgdEngine:
             global_idx = candidates[loc]
             watch_id = self.idx_to_watch_id[global_idx]
             score = float(scores[loc])
-            shown.add(watch_id)
+            
+            # Add this watch and all its variants to shown set
+            similar_watches = self._get_similar_watches(watch_id)
+            shown.update(similar_watches)
+            
             recommendations.append(
                 self._format_recommendation(watch_id, score, "sgd_raw_score")
             )

@@ -671,23 +671,17 @@ def main():
     generator = StyleFocusedEmbeddingGenerator()
     
     # Path to final scrape data
-    input_path = "../production_scrape_20250601_175426/data/final_scrape.json"
+    input_path = "data/processed/watches_processed.json"
     
-    # Generate style-focused embeddings from image URLs with brand balancing
+    # Generate style-focused embeddings from image URLs
     embedding_matrix, enhanced_watches = generator.process_final_scrape_with_image_urls(
-        input_path, 
-        max_watches=500,  # Process 500 brand-balanced watches
-        brand_balanced=True
+        input_path
     )
     
     # Save results
-    generator.save_results(embedding_matrix, enhanced_watches, "brand_balanced_500_output")
+    generator.save_results(embedding_matrix, enhanced_watches, "visual_style_output")
     
-    print("\n🎉 Brand-balanced visual style embedding generation complete!")
-    print("✨ 500 watches processed with balanced brand representation!")
-    print("💰 Cost-effective GPT-4o-mini processing!")
-    print("🎯 Ready for style-focused recommendation testing!")
-    print("Review the sample_visual_descriptions.txt file to see the brand diversity.")
+    print("\n🎉 Visual style embedding generation complete!")
 
 if __name__ == "__main__":
     main() 
