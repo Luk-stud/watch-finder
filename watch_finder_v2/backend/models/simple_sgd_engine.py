@@ -328,13 +328,12 @@ class SimpleSgdEngine:
                 formatted_data[key] = value
         
         # Map DINO image fields to frontend-expected fields
-        if 'image_path' in formatted_data:
-            # Use CDN URLs if available, otherwise use placeholders
-            if formatted_data.get('image_url'):
-                formatted_data['main_image'] = formatted_data['image_url']
-            else:
-                formatted_data['main_image'] = None
-            formatted_data['local_image_path'] = None
+        # Always check for image_url, regardless of image_path
+        if formatted_data.get('image_url'):
+            formatted_data['main_image'] = formatted_data['image_url']
+        else:
+            formatted_data['main_image'] = None
+        formatted_data['local_image_path'] = None
         
         return {
             **formatted_data,
