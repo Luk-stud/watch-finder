@@ -82,6 +82,8 @@ class SimpleSgdEngine:
         
         try:
             precomputed_path = os.path.join(self.data_dir, 'precomputed_embeddings.pkl')
+            logger.info(f"🔍 Looking for embeddings at: {precomputed_path}")
+            logger.info(f"🔍 Absolute path: {os.path.abspath(precomputed_path)}")
             
             if not os.path.exists(precomputed_path):
                 logger.error(f"❌ Precomputed file not found: {precomputed_path}")
@@ -89,8 +91,14 @@ class SimpleSgdEngine:
                 return
                 
             # Load precomputed data
+            logger.info(f"📖 Loading embeddings from: {precomputed_path}")
             with open(precomputed_path, 'rb') as f:
                 precomputed_data = pickle.load(f)
+            
+            logger.info(f"📊 Loaded data keys: {list(precomputed_data.keys())}")
+            logger.info(f"📊 Embedding dim from file: {precomputed_data.get('embedding_dim', 'NOT_FOUND')}")
+            logger.info(f"📊 Number of watches from file: {len(precomputed_data.get('watch_data', {}))}")
+            logger.info(f"📊 Number of embeddings from file: {len(precomputed_data.get('final_embeddings', {}))}")
             
             self.watch_data = precomputed_data['watch_data']
             final_embeddings = precomputed_data['final_embeddings']
