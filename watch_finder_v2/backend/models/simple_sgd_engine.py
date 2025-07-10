@@ -329,7 +329,8 @@ class SimpleSgdEngine:
         
         return {
             **formatted_data,
-            'watch_id': int(watch_id),
+            # Preserve original watch_id type; attempt int cast only if possible
+            'watch_id': (int(watch_id) if isinstance(watch_id, (int, np.integer)) or (isinstance(watch_id, str) and watch_id.isdigit()) else str(watch_id)),
             'confidence': float(confidence),
             'algorithm': str(algorithm)
         }
