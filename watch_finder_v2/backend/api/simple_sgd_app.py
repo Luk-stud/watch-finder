@@ -167,18 +167,37 @@ def submit_feedback():
         if engine is None:
             return jsonify({'error': 'Engine not initialized'}), 500
         
+        # Debug: Log raw request data
+        logger.info(f"🔍 Raw request data: {request.get_data()}")
+        logger.info(f"🔍 Request headers: {dict(request.headers)}")
+        logger.info(f"🔍 Request content type: {request.content_type}")
+        
         data = request.get_json()
-        logger.info(f"🔍 Received feedback data: {data}")
+        logger.info(f"🔍 Parsed JSON data: {data}")
+        
+        # Check if data is None or empty
+        if not data:
+            logger.error("❌ No JSON data received")
+            return jsonify({'error': 'No JSON data received'}), 400
         
         session_id = data.get('session_id')
         watch_id = data.get('watch_id')
         feedback_type = data.get('type')  # 'like' or 'dislike'
         
-        logger.info(f"🔍 Parsed - session_id: {session_id}, watch_id: {watch_id}, type: {feedback_type}")
+        logger.info(f"🔍 Parsed fields - session_id: '{session_id}', watch_id: {watch_id}, type: '{feedback_type}'")
         
-        if not session_id or watch_id is None or not feedback_type:
-            logger.error(f"❌ Missing required fields: session_id={session_id}, watch_id={watch_id}, type={feedback_type}")
-            return jsonify({'error': 'session_id, watch_id, and type are required'}), 400
+        # More detailed validation
+        if not session_id:
+            logger.error("❌ Missing session_id")
+            return jsonify({'error': 'session_id is required'}), 400
+        
+        if watch_id is None:
+            logger.error("❌ Missing watch_id")
+            return jsonify({'error': 'watch_id is required'}), 400
+        
+        if not feedback_type:
+            logger.error("❌ Missing type")
+            return jsonify({'error': 'type is required'}), 400
         
         # Convert feedback to reward signal
         reward = 1.0 if feedback_type == 'like' else 0.0
