@@ -1,4 +1,4 @@
-// API Service for Watch Finder LinUCB Backend
+// API Service for Watch Finder Backend
 
 import { ENV_CONFIG, shouldDebugLog } from '../config/environment';
 import { findWorkingApiUrl } from '../utils/connectionTest';
@@ -127,7 +127,7 @@ export interface ModernWatch {
   specs?: WatchSpecs;
   brand_website?: string;
   
-  // LinUCB algorithm fields
+  // Algorithm fields
   algorithm?: string;
   confidence?: number;
   score?: number;
@@ -498,7 +498,7 @@ export class ApiService {
       body: JSON.stringify({
         session_id: this.sessionId,
         watch_id: watchId, 
-        feedback: action 
+        feedback: action  // Changed from 'type' to 'feedback' to match production_linucb_app.py
       }),
     });
   }

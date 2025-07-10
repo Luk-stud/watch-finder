@@ -201,9 +201,9 @@ def submit_feedback():
         
         session_id = data.get('session_id')
         watch_id = data.get('watch_id')
-        feedback_type = data.get('type')  # 'like' or 'dislike'
+        feedback = data.get('feedback')  # 'like' or 'dislike' - match production_linucb_app.py
         
-        logger.info(f"🔍 Parsed fields - session_id: '{session_id}', watch_id: {watch_id}, type: '{feedback_type}'")
+        logger.info(f"🔍 Parsed fields - session_id: '{session_id}', watch_id: {watch_id}, feedback: '{feedback}'")
         
         # More detailed validation
         if not session_id:
@@ -214,12 +214,16 @@ def submit_feedback():
             logger.error("❌ Missing watch_id")
             return jsonify({'error': 'watch_id is required'}), 400
         
-        if not feedback_type:
-            logger.error("❌ Missing type")
-            return jsonify({'error': 'type is required'}), 400
+        if not feedback:
+            logger.error("❌ Missing feedback")
+            return jsonify({'error': 'feedback is required'}), 400
+        
+        if feedback not in ['like', 'dislike']:
+            logger.error(f"❌ Invalid feedback value: '{feedback}'")
+            return jsonify({'error': 'feedback must be "like" or "dislike"'}), 400
         
         # Convert feedback to reward signal
-        reward = 1.0 if feedback_type == 'like' else 0.0
+        reward = 1.0 if feedback == 'like' else 0.0
         
         # Update engine
         engine.update(session_id, int(watch_id), reward)
@@ -233,7 +237,7 @@ def submit_feedback():
         
         return jsonify({
             'message': f'Feedback processed successfully',
-            'feedback_type': feedback_type,
+            'feedback_type': feedback,
             'watch_id': watch_id,
             'session_id': session_id
         })
