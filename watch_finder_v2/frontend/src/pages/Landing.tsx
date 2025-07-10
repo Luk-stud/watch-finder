@@ -44,7 +44,7 @@ const Landing = () => {
             </div>
             <h3 className="text-foreground font-medium mb-1 text-sm tracking-wide">AI Learning</h3>
             <p className="text-muted-foreground text-xs font-light tracking-wide leading-relaxed">
-              Advanced LinUCB algorithm adapts to your preferences with every swipe
+                              Advanced recommendation algorithm adapts to your preferences with every swipe
             </p>
           </div>
           

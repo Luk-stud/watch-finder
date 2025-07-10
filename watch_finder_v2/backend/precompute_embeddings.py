@@ -29,8 +29,8 @@ logger = logging.getLogger(__name__)
 class EmbeddingPrecomputer:
     def __init__(self, 
                  data_dir: str = "data",
-                 text_dim: int = 100,
-                 clip_dim: int = 100):
+                 text_dim: int = 384,
+                 clip_dim: int = 384):
         self.data_dir = data_dir
         self.text_dim = text_dim
         self.clip_dim = clip_dim
@@ -68,7 +68,7 @@ class EmbeddingPrecomputer:
         """Load metadata and raw embeddings."""
         logger.info("📖 Loading raw data...")
         
-        # Load metadata
+        # Load metadata - this is the TRUE source of all data needed.
         metadata_path = os.path.join(self.data_dir, 'watch_text_metadata.pkl')
         with open(metadata_path, 'rb') as f:
             metadata_list = pickle.load(f)
@@ -175,12 +175,8 @@ class EmbeddingPrecomputer:
             try:
                 watch_id = watch_dict.get('index', idx)
                 
-                # Store watch metadata
-                precomputed_data['watch_data'][watch_id] = {
-                    **watch_dict,
-                    'watch_id': watch_id,
-                    'index': watch_id
-                }
+                # The watch_dict from the metadata file is the complete source of data.
+                precomputed_data['watch_data'][watch_id] = watch_dict
                 
                 # Get and reduce text embedding
                 text_emb = text_embeddings[idx] if idx < len(text_embeddings) else None
@@ -236,7 +232,6 @@ class EmbeddingPrecomputer:
 
 def main():
     """Run the precomputation pipeline."""
-    # Check if data directory exists
     data_dir = "data"
     if not os.path.exists(data_dir):
         logger.error(f"❌ Data directory '{data_dir}' not found!")
@@ -246,17 +241,39 @@ def main():
         logger.info("  - data/watch_clip_embeddings.pkl")
         return
         
-    # Run precomputation
-    precomputer = EmbeddingPrecomputer(data_dir=data_dir)
+    logger.info("🚀 Starting precomputation with Railway 8GB/8vCPU optimized settings:")
+    logger.info("   • Text embeddings: 1536D → 384D")
+    logger.info("   • CLIP embeddings: 512D → 384D")
+    logger.info("   • Total output: 768D (384D + 384D)")
+    logger.info("   • Target: High quality for Railway deployment")
+        
+    precomputer = EmbeddingPrecomputer(data_dir=data_dir, text_dim=384, clip_dim=384)
     precomputed_data = precomputer.precompute_all()
     
-    # Print summary
-    logger.info("\n📊 Precomputation Summary:")
-    logger.info(f"  • Total watches: {precomputed_data['total_watches']}")
-    logger.info(f"  • Embedding dimension: {precomputed_data['embedding_dim']}D")
-    logger.info(f"  • Text dimension: {precomputed_data['text_dim']}D")
-    logger.info(f"  • CLIP dimension: {precomputed_data['clip_dim']}D")
-    logger.info(f"  • Final embeddings: {len(precomputed_data['final_embeddings'])}")
+    # Verification
+    if precomputed_data:
+        color_spec_count = 0
+        total_with_specs = 0
+        for watch_id, watch_data in precomputed_data['watch_data'].items():
+            if 'specs' in watch_data and isinstance(watch_data['specs'], dict):
+                total_with_specs += 1
+                if 'dial_color' in watch_data['specs']: # Using dial_color as it appears in the metadata
+                    color_spec_count += 1
+        
+        if color_spec_count > 0:
+            logger.info(f"✅ Verification successful: Found 'dial_color' in {color_spec_count}/{total_with_specs} watches with specs.")
+        else:
+            logger.error("❌ Verification failed: 'dial_color' was not found in any watch with a specs dictionary.")
 
-if __name__ == "__main__":
+    # Print summary
+    if precomputed_data:
+        logger.info("\n📊 Precomputation Summary:")
+        logger.info(f"  • Total watches: {precomputed_data['total_watches']}")
+        logger.info(f"  • Embedding dimension: {precomputed_data['embedding_dim']}D")
+        logger.info(f"  • Text dimension: {precomputed_data['text_dim']}D")
+        logger.info(f"  • CLIP dimension: {precomputed_data['clip_dim']}D")
+        logger.info(f"  • Final embeddings: {len(precomputed_data['final_embeddings'])}")
+        logger.info(f"✅ Ready for Railway 8GB/8vCPU deployment!")
+
+if __name__ == '__main__':
     main() 

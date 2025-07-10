@@ -329,11 +329,12 @@ class SimpleSgdEngine:
         
         # Map DINO image fields to frontend-expected fields
         if 'image_path' in formatted_data:
-            # For now, use placeholder images since we don't have image serving set up
-            # The frontend will show placeholder images instead of actual watch photos
-            formatted_data['main_image'] = None
+            # Use CDN URLs if available, otherwise use placeholders
+            if formatted_data.get('image_url'):
+                formatted_data['main_image'] = formatted_data['image_url']
+            else:
+                formatted_data['main_image'] = None
             formatted_data['local_image_path'] = None
-            formatted_data['image_url'] = None
         
         return {
             **formatted_data,
