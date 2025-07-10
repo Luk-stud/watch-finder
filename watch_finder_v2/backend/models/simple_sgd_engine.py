@@ -329,8 +329,18 @@ class SimpleSgdEngine:
         
         # Map DINO image fields to frontend-expected fields
         if 'image_path' in formatted_data:
-            formatted_data['local_image_path'] = formatted_data['image_path']
-            formatted_data['main_image'] = formatted_data['image_path']
+            # Extract just the filename from the full path
+            image_filename = formatted_data.get('image_filename', '')
+            if not image_filename and 'image_path' in formatted_data:
+                # Extract filename from image_path if image_filename is not available
+                image_path = formatted_data['image_path']
+                image_filename = os.path.basename(image_path) if image_path else ''
+            
+            if image_filename:
+                # Use the API endpoint to serve images
+                formatted_data['main_image'] = f"/api/images/{image_filename}"
+                formatted_data['local_image_path'] = f"/api/images/{image_filename}"
+                formatted_data['image_url'] = f"/api/images/{image_filename}"
         
         return {
             **formatted_data,

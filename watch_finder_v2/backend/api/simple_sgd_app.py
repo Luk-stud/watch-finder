@@ -16,7 +16,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import uuid
 import logging
@@ -62,6 +62,32 @@ def health_check():
         'engine': 'Simple SGD (scikit-learn)',
         'stats': stats
     })
+
+@app.route('/api/images/<path:filename>', methods=['GET'])
+def serve_image(filename):
+    """Serve watch images from the production scrape directory."""
+    try:
+        # For Railway deployment, images are copied to /app/images/
+        # For local development, use the full path
+        if os.path.exists('/app/images/'):
+            images_dir = '/app/images'
+        else:
+            # Local development path
+            images_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
+                                     'production_scrape_20250601_175426', 'images')
+        
+        # Check if the file exists
+        file_path = os.path.join(images_dir, filename)
+        if not os.path.exists(file_path):
+            logger.warning(f"❌ Image not found: {file_path}")
+            return jsonify({'error': 'Image not found'}), 404
+        
+        # Serve the image file
+        return send_from_directory(images_dir, filename)
+        
+    except Exception as e:
+        logger.error(f"❌ Error serving image {filename}: {e}")
+        return jsonify({'error': 'Failed to serve image'}), 500
 
 @app.route('/api/session', methods=['POST'])
 def create_session():
