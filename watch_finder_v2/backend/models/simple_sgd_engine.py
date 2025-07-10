@@ -327,6 +327,11 @@ class SimpleSgdEngine:
             else:
                 formatted_data[key] = value
         
+        # Map DINO image fields to frontend-expected fields
+        if 'image_path' in formatted_data:
+            formatted_data['local_image_path'] = formatted_data['image_path']
+            formatted_data['main_image'] = formatted_data['image_path']
+        
         return {
             **formatted_data,
             # Preserve original watch_id type; attempt int cast only if possible
