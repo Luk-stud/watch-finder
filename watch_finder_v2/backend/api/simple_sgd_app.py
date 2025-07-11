@@ -35,13 +35,13 @@ CORS(app)
 logger.info("🚀 Initializing Simple SGD Engine...")
 try:
     engine = SimpleSgdEngine(
-        batch_size=3,           # 3 recommendations per request
+        batch_size=1,           # 1 recommendation per request for more responsive learning
         data_dir=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data'),
         like_weight=5.0,
         alpha=0.0001,
         prior_like_rate=0.2
     )
-    logger.info("✅ Simple SGD Engine initialized successfully with optimal parameters!")
+    logger.info("✅ Simple SGD Engine initialized successfully with batch_size=1 for responsive learning!")
 except Exception as e:
     logger.error(f"❌ Failed to initialize Simple SGD Engine: {e}")
     logger.error(f"❌ Error details: {traceback.format_exc()}")
