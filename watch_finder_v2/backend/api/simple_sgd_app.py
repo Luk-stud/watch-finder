@@ -199,51 +199,46 @@ def submit_feedback():
         # Log all keys in the data
         logger.info(f"🔍 Data keys: {list(data.keys())}")
         
+        # Extract fields with better error handling
         session_id = data.get('session_id')
         watch_id = data.get('watch_id')
-        feedback = data.get('feedback')  # 'like' or 'dislike' - match production_linucb_app.py
+        feedback = data.get('feedback')
         
         logger.info(f"🔍 Parsed fields - session_id: '{session_id}', watch_id: {watch_id}, feedback: '{feedback}'")
         
-        # More detailed validation
+        # Validate required fields
         if not session_id:
-            logger.error("❌ Missing session_id")
             return jsonify({'error': 'session_id is required'}), 400
-        
-        if watch_id is None:
-            logger.error("❌ Missing watch_id")
+        if not watch_id:
             return jsonify({'error': 'watch_id is required'}), 400
-        
         if not feedback:
-            logger.error("❌ Missing feedback")
             return jsonify({'error': 'feedback is required'}), 400
         
+        # Validate feedback value
         if feedback not in ['like', 'dislike']:
-            logger.error(f"❌ Invalid feedback value: '{feedback}'")
             return jsonify({'error': 'feedback must be "like" or "dislike"'}), 400
         
-        # Convert feedback to reward signal
+        # Convert watch_id to int if it's a string number
+        try:
+            if isinstance(watch_id, str) and watch_id.isdigit():
+                watch_id = int(watch_id)
+        except ValueError:
+            pass  # Keep as string if it's not a number
+        
+        # Convert feedback to reward
         reward = 1.0 if feedback == 'like' else 0.0
         
-        # Update engine - support both numeric and string IDs
-        try:
-            watch_id_key = int(watch_id)
-        except (ValueError, TypeError):
-            watch_id_key = str(watch_id)
-
-        engine.update(session_id, watch_id_key, reward)
+        # Update the engine with the feedback
+        engine.update(session_id, watch_id, reward)
         
-        # Get session stats
-        stats = engine.get_stats()
+        logger.info(f"✅ Processed {feedback} feedback for watch {watch_id} in session {session_id}")
         
-        feedback_msg = "like" if reward > 0 else "dislike"
-        logger.info(f"✅ Processed {feedback_msg} feedback for watch {watch_id} in session {session_id}")
-        logger.info(f"📊 Total sessions: {stats['total_sessions']}")
+        # Log total sessions for debugging
+        logger.info(f"📊 Total sessions: {len(engine.session_models)}")
         
         return jsonify({
-            'message': f'Feedback processed successfully',
-            'feedback_type': feedback,
-            'watch_id': watch_id,
+            'status': 'success',
+            'message': f'Feedback recorded: {feedback} for watch {watch_id}',
             'session_id': session_id
         })
         
@@ -251,6 +246,55 @@ def submit_feedback():
         logger.error(f"❌ Error processing feedback: {e}")
         logger.error(f"❌ Error details: {traceback.format_exc()}")
         return jsonify({'error': 'Failed to process feedback'}), 500
+
+@app.route('/api/variants/<watch_id>', methods=['GET'])
+def get_variants(watch_id):
+    """Get all variants of a specific watch (same brand and model)."""
+    try:
+        if engine is None:
+            return jsonify({'error': 'Engine not initialized'}), 500
+        
+        # Convert watch_id to int if it's a string number
+        try:
+            if isinstance(watch_id, str) and watch_id.isdigit():
+                watch_id = int(watch_id)
+        except ValueError:
+            pass  # Keep as string if it's not a number
+        
+        # Get the watch data to verify it exists
+        watch_data = engine.watch_data.get(watch_id)
+        if not watch_data:
+            return jsonify({'error': 'Watch not found'}), 404
+        
+        # Get all variants (similar watches with same brand+model)
+        similar_watch_ids = engine._get_similar_watches(watch_id)
+        
+        # Convert to list and get watch data for each variant
+        variants = []
+        for variant_id in similar_watch_ids:
+            variant_data = engine.watch_data.get(variant_id, {})
+            if variant_data:
+                # Format the variant data
+                formatted_variant = engine._format_recommendation(
+                    variant_id, 
+                    0.0,  # No confidence score for variants
+                    "variant"
+                )
+                variants.append(formatted_variant)
+        
+        logger.info(f"🔍 Found {len(variants)} variants for watch {watch_id}")
+        
+        return jsonify({
+            'status': 'success',
+            'watch_id': watch_id,
+            'variants': variants,
+            'count': len(variants)
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error getting variants: {e}")
+        logger.error(f"❌ Error details: {traceback.format_exc()}")
+        return jsonify({'error': 'Failed to get variants'}), 500
 
 def apply_filters(recommendations, filters):
     """Apply frontend filters to recommendations (for compatibility)."""

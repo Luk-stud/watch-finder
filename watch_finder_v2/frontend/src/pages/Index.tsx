@@ -25,6 +25,8 @@ const Index = () => {
   // Simple overlay state
   const [selectedWatch, setSelectedWatch] = useState<Watch | null>(null);
   const [showSpecs, setShowSpecs] = useState(false);
+  const [showVariants, setShowVariants] = useState(false);
+  const [variants, setVariants] = useState<Watch[]>([]);
 
   // Use the viewport height hook for mobile browser compatibility
   useViewportHeight();
@@ -189,6 +191,47 @@ const Index = () => {
     setShowSpecs(true);
   };
 
+  const handleVariantsClick = async (watch: Watch) => {
+    try {
+      setSelectedWatch(watch);
+      setShowVariants(true);
+      
+      // Get variants from the API
+      const watchId = watch.watch_id || watch.index;
+      const response = await apiService.getVariants(watchId);
+      
+      if (response.status === 'success' && response.recommendations) {
+        setVariants(response.recommendations);
+      } else {
+        console.error('Failed to get variants:', response.message);
+        setVariants([]);
+      }
+    } catch (error) {
+      console.error('Error getting variants:', error);
+      setVariants([]);
+    }
+  };
+
+  const handleVariantLike = async (variant: Watch) => {
+    try {
+      // Send like feedback for the variant
+      const watchId = variant.watch_id || variant.index;
+      await apiService.addFeedback(watchId, 'like');
+      
+      // Close the variants overlay
+      setShowVariants(false);
+      
+      // Move to next watch (same as regular like)
+      if (currentIndex < currentWatches.length - 1) {
+        setCurrentIndex(prev => prev + 1);
+      } else {
+        await getMoreRecommendations();
+      }
+    } catch (error) {
+      console.error('Error liking variant:', error);
+    }
+  };
+
   const resetSession = async () => {
     try {
       setIsLoading(true);
@@ -328,6 +371,7 @@ const Index = () => {
                 watch={currentWatch}
                 onSwipe={handleSwipe}
                 onSpecsClick={handleSpecsClick}
+                onVariantsClick={handleVariantsClick}
               />
             </div>
           )}
@@ -365,6 +409,16 @@ const Index = () => {
         <SpecsOverlay
           watch={selectedWatch}
           onClose={() => setShowSpecs(false)}
+        />
+      )}
+
+      {/* Variants Overlay */}
+      {showVariants && selectedWatch && (
+        <VariantsOverlay
+          watch={selectedWatch}
+          variants={variants}
+          onClose={() => setShowVariants(false)}
+          onVariantLike={handleVariantLike}
         />
       )}
     </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { X } from 'lucide-react';
+import { X, Heart } from 'lucide-react';
 import { ModernWatch } from '../lib/api';
 import { formatPrice, getWatchImageUrl } from '../data/watchData';
 
@@ -7,9 +7,15 @@ interface VariantsOverlayProps {
   watch: ModernWatch;
   variants: ModernWatch[];
   onClose: () => void;
+  onVariantLike?: (variant: ModernWatch) => void;
 }
 
-const VariantsOverlay: React.FC<VariantsOverlayProps> = ({ watch, variants, onClose }) => {
+const VariantsOverlay: React.FC<VariantsOverlayProps> = ({ 
+  watch, 
+  variants, 
+  onClose, 
+  onVariantLike 
+}) => {
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl border border-gray-700">
@@ -36,15 +42,15 @@ const VariantsOverlay: React.FC<VariantsOverlayProps> = ({ watch, variants, onCl
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {variants.map((variant) => (
               <div
-                key={variant.index}
+                key={variant.watch_id || variant.index}
                 className={`bg-gray-800/50 rounded-xl p-4 border ${
-                  variant.index === watch.index
+                  variant.watch_id === watch.watch_id || variant.index === watch.index
                     ? 'border-yellow-500'
                     : 'border-gray-700'
                 }`}
               >
                 {/* Watch Image */}
-                <div className="aspect-square bg-gray-900 rounded-lg mb-4 overflow-hidden">
+                <div className="aspect-square bg-gray-900 rounded-lg mb-4 overflow-hidden relative">
                   <img
                     src={getWatchImageUrl(variant)}
                     alt={`${variant.brand} ${variant.model}`}
@@ -54,6 +60,17 @@ const VariantsOverlay: React.FC<VariantsOverlayProps> = ({ watch, variants, onCl
                       target.src = '/placeholder.png';
                     }}
                   />
+                  
+                  {/* Like Button */}
+                  {onVariantLike && (
+                    <button
+                      onClick={() => onVariantLike(variant)}
+                      className="absolute top-2 right-2 w-8 h-8 rounded-full bg-green-500/90 hover:bg-green-500 flex items-center justify-center transition-colors"
+                      title="Like this variant"
+                    >
+                      <Heart className="w-4 h-4 text-white fill-white" />
+                    </button>
+                  )}
                 </div>
 
                 {/* Watch Info */}
@@ -88,7 +105,7 @@ const VariantsOverlay: React.FC<VariantsOverlayProps> = ({ watch, variants, onCl
                   </div>
 
                   {/* Current Watch Indicator */}
-                  {variant.index === watch.index && (
+                  {(variant.watch_id === watch.watch_id || variant.index === watch.index) && (
                     <div className="mt-2 text-yellow-500 text-sm font-medium">
                       Current Watch
                     </div>

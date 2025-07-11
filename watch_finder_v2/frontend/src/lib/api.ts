@@ -483,7 +483,7 @@ export class ApiService {
   }
 
   async addFeedback(
-    watchId: number,
+    watchId: string | number,
     action: 'like' | 'dislike'
   ): Promise<FeedbackResponse> {
     if (!this.sessionId) {
@@ -525,9 +525,24 @@ export class ApiService {
     return this.getRecommendations();
   }
 
-  async getVariants(watchIndex: number): Promise<RecommendationsResponse> {
-    // For now, just return more recommendations since LinUCB doesn't have variants concept
-    return this.getRecommendations();
+  async getVariants(watchId: string | number): Promise<RecommendationsResponse> {
+    try {
+      const response = await this.request<any>(`/variants/${watchId}`, {
+        method: 'GET',
+      });
+      
+      return {
+        status: 'success',
+        recommendations: response.variants || []
+      };
+    } catch (error) {
+      console.error('Error getting variants:', error);
+      return {
+        status: 'error',
+        recommendations: [],
+        message: error instanceof Error ? error.message : 'Failed to get variants'
+      };
+    }
   }
 
   async getStats(): Promise<{ status: string; message: string }> {

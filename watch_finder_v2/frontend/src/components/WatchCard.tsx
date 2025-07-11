@@ -1,17 +1,19 @@
 import React, { useState, useRef } from 'react';
 import { Watch, getWatchImageUrl, formatPrice, getWatchPrice } from '../data/watchData';
-import { Heart, X, Info, Copy } from 'lucide-react';
+import { Heart, X, Info, Layers, Copy } from 'lucide-react';
 
 export interface WatchCardProps {
   watch: Watch;
   onSwipe: (direction: 'left' | 'right') => void;
   onSpecsClick: (watch: Watch) => void;
+  onVariantsClick?: (watch: Watch) => void;
 }
 
 const WatchCard: React.FC<WatchCardProps> = ({
   watch,
   onSwipe,
-  onSpecsClick
+  onSpecsClick,
+  onVariantsClick
 }) => {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -211,16 +213,34 @@ const WatchCard: React.FC<WatchCardProps> = ({
             </div>
           )}
           
-          {/* Info Button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onSpecsClick(watch);
-            }}
-            className="absolute top-3 right-3 w-10 h-10 rounded-full bg-card/95 backdrop-blur-sm border border-border flex items-center justify-center hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            <Info className="w-4 h-4 text-muted-foreground" />
-          </button>
+          {/* Action Buttons */}
+          <div className="absolute top-3 right-3 flex gap-2">
+            {/* Variants Button */}
+            {onVariantsClick && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onVariantsClick(watch);
+                }}
+                className="w-10 h-10 rounded-full bg-card/95 backdrop-blur-sm border border-border flex items-center justify-center hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                title="View variants"
+              >
+                <Layers className="w-4 h-4 text-muted-foreground" />
+              </button>
+            )}
+            
+            {/* Info Button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onSpecsClick(watch);
+              }}
+              className="w-10 h-10 rounded-full bg-card/95 backdrop-blur-sm border border-border flex items-center justify-center hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              title="View specifications"
+            >
+              <Info className="w-4 h-4 text-muted-foreground" />
+            </button>
+          </div>
         </div>
 
         {/* Watch Details */}
