@@ -269,7 +269,7 @@ class SimpleSgdEngine:
             top_10_scores = np.sort(scores)[-10:][::-1]
             logger.debug(f"🎯 SGD top-10 raw scores: {[f'{s:.2f}' for s in top_10_scores]}")
 
-        # Select top-k by raw score
+        # Select top-k by raw score, but ensure we don't return multiple watches from the same brand+model group
         k = min(self.batch_size, len(scores))
         if k == len(scores):
             top_k_local = np.arange(len(scores))
@@ -278,20 +278,39 @@ class SimpleSgdEngine:
         
         sorted_idx = top_k_local[self._argsort_descending(scores[top_k_local])]
 
-        # Format recommendations
+        # Format recommendations, ensuring no duplicates from same brand+model group
         recommendations = []
+        seen_groups = set()
+        
         for loc in sorted_idx:
             global_idx = candidates[loc]
             watch_id = self.idx_to_watch_id[global_idx]
             score = float(scores[loc])
             
+            # Check if this watch's brand+model group is already in this batch
+            watch_data = self.watch_data.get(watch_id, {})
+            brand = watch_data.get('brand', '').lower().strip()
+            model = watch_data.get('model', '').lower().strip()
+            group_key = f"{brand}|{model}"
+            
+            if group_key in seen_groups:
+                # Skip this watch as we already have one from this group in this batch
+                continue
+            
             # Add this watch and all its variants to shown set
             similar_watches = self._get_similar_watches(watch_id)
             shown.update(similar_watches)
             
+            # Mark this group as seen in this batch
+            seen_groups.add(group_key)
+            
             recommendations.append(
                 self._format_recommendation(watch_id, score, "sgd_raw_score")
             )
+            
+            # Stop if we have enough recommendations
+            if len(recommendations) >= self.batch_size:
+                break
 
         scores_str = [f"{r['confidence']:.2f}" for r in recommendations]
         logger.info(f"🎯 SGD recommendations for session {session_id}: "
