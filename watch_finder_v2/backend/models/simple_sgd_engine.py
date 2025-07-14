@@ -186,11 +186,13 @@ class SimpleSgdEngine:
         initial_intercept = np.log(self.prior_like_rate / (1 - self.prior_like_rate))
 
         # 2. Use ASGD (average=True) for smoother, more stable updates.
+        # Use a small constant learning rate to prevent large coefficient swings
         model = SGDClassifier(
-            loss="log_loss",           # Logistic regression
-            learning_rate="optimal",
-            alpha=self.alpha,          # Use configurable regularization
-            average=True,              # Use Averaged SGD for stability
+            loss="log_loss",            # Logistic regression
+            learning_rate="constant",   # Fixed step size instead of "optimal"
+            eta0=0.05,                   # Smaller step → gentler updates
+            alpha=self.alpha,            # Regularization strength
+            average=True,                # Averaged SGD for smoother convergence
             max_iter=1000,
             tol=1e-3,
             random_state=42,
@@ -265,13 +267,18 @@ class SimpleSgdEngine:
             scores = self.items_matrix[candidates] @ global_centroid
             logger.debug(f"🎯 SGD using global centroid similarity scores (no training data yet)")
         else:
-            scores = model.decision_function(X_cand)
-            logger.debug(f"🎲 SGD raw decision scores: min={np.min(scores):.2f}, "
-                         f"max={np.max(scores):.2f}, mean={np.mean(scores):.2f}")
-            
+            # Use calibrated probabilities instead of raw margins to avoid score explosions
+            proba = model.predict_proba(X_cand)
+            # Column 1 is P(y==1)
+            scores = proba[:, 1]
+            logger.debug(
+                "🎲 SGD probability scores: min={:.2f}, max={:.2f}, mean={:.2f}".format(
+                    np.min(scores), np.max(scores), np.mean(scores)
+                )
+            )
             # Debug: Show top scores before selection
             top_10_scores = np.sort(scores)[-10:][::-1]
-            logger.debug(f"🎯 SGD top-10 raw scores: {[f'{s:.2f}' for s in top_10_scores]}")
+            logger.debug(f"🎯 SGD top-10 P(like) scores: {[f'{s:.2f}' for s in top_10_scores]}")
 
         # Select top-k by raw score, but ensure we don't return multiple watches from the same brand+model group
         k = min(self.batch_size, len(scores))
