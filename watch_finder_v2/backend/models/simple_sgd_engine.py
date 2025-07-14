@@ -69,6 +69,8 @@ class SimpleSgdEngine:
         self.session_interaction_counts: Dict[str, int] = {}
         self.session_timestamps: Dict[str, List[float]] = {}
         self.session_initialized: Dict[str, bool] = {}
+        # Track liked embeddings per session to build a user preference vector.
+        self.session_liked_embeddings: Dict[str, List[np.ndarray]] = {}
 
         logger.info("🔧 SGD Engine configured with the following parameters:")
         logger.info(f"   - Like Weight: {self.like_weight}")
@@ -223,6 +225,9 @@ class SimpleSgdEngine:
         
         logger.info(f"✅ Created Simple SGD session {session_id} with robust prior initialization")
 
+        # Initialize liked embeddings list for preference centroid
+        self.session_liked_embeddings[session_id] = []
+
     def get_recommendations(self,
                           session_id: str,
                           exclude_ids: Optional[Set[int]] = None
@@ -267,10 +272,15 @@ class SimpleSgdEngine:
             scores = self.items_matrix[candidates] @ global_centroid
             logger.debug(f"🎯 SGD using global centroid similarity scores (no training data yet)")
         else:
-            # Use calibrated probabilities instead of raw margins to avoid score explosions
-            proba = model.predict_proba(X_cand)
-            # Column 1 is P(y==1)
-            scores = proba[:, 1]
+            # Compute calibrated probabilities (exploitation term)
+            proba = model.predict_proba(X_cand)[:, 1]
+
+            # --- Preference centroid similarity (stability term) ---
+            pref_vector = self._get_preference_vector(session_id)
+            cosine_sims = self.items_matrix[candidates] @ pref_vector
+
+            # Blend: 70% model probability, 30% cosine similarity to preference
+            scores = 0.7 * proba + 0.3 * cosine_sims
             logger.debug(
                 "🎲 SGD probability scores: min={:.2f}, max={:.2f}, mean={:.2f}".format(
                     np.min(scores), np.max(scores), np.mean(scores)
@@ -315,7 +325,10 @@ class SimpleSgdEngine:
             # Mark this group as seen in this batch
             seen_groups.add(group_key)
             
-            algorithm = "sgd_centroid_similarity" if not self.session_initialized[session_id] else "sgd_raw_score"
+            if not self.session_initialized[session_id]:
+                algorithm = "sgd_centroid_similarity"
+            else:
+                algorithm = "sgd_blend_prob_cosine"
             recommendations.append(
                 self._format_recommendation(watch_id, score, algorithm)
             )
@@ -382,6 +395,9 @@ class SimpleSgdEngine:
         
         if y == 1:
             self.session_likes[session_id] += 1
+
+            # Store embedding of liked watch for preference vector
+            self.session_liked_embeddings[session_id].append(x)
         else:
             self.session_dislikes[session_id] += 1
         
@@ -484,3 +500,22 @@ class SimpleSgdEngine:
             "max_interactions_per_session": max(interaction_counts) if interaction_counts else 0,
             "algorithm": "SGDClassifier (logistic)"
         } 
+
+    def _get_preference_vector(self, session_id: str) -> np.ndarray:
+        """Return a unit vector representing the centroid of liked embeddings for the session.
+
+        Falls back to global centroid if the user has no likes yet.
+        """
+        liked = self.session_liked_embeddings.get(session_id, [])
+        if not liked:
+            # Global centroid (already normalised rows) for cold start / no likes yet
+            if not hasattr(self, '_global_centroid'):
+                gc = np.mean(self.items_matrix, axis=0)
+                self._global_centroid = gc / np.linalg.norm(gc)
+            return self._global_centroid
+
+        centroid = np.mean(liked, axis=0)
+        norm = np.linalg.norm(centroid)
+        if norm == 0:
+            return centroid  # rare degenerate case
+        return centroid / norm 
