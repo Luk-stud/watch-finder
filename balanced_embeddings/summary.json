@@ -1,0 +1,13 @@
+{
+  "total_watches": 290,
+  "models": [
+    "clip_vit_b32",
+    "clip_vit_l14",
+    "dino_vit"
+  ],
+  "embedding_dimensions": {
+    "clip_vit_b32": 512,
+    "clip_vit_l14": 768,
+    "dino_vit": 768
+  }
+}

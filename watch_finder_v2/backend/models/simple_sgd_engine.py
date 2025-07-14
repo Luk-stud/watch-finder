@@ -254,12 +254,16 @@ class SimpleSgdEngine:
         # Prepare feature matrix for candidates
         X_cand = self.scaler.transform(self.items_matrix[candidates])
 
-        # Use the raw decision_function scores for ranking, as per user suggestion.
-        # This avoids the saturation and overflow issues seen with predict_proba/sigmoid.
+        # IMPROVED COLD START: Use similarity-based recommendations instead of random
         if not self.session_initialized[session_id]:
-            # Before any training, use random scores to produce a random ranking.
-            scores = np.random.randn(len(candidates))
-            logger.debug(f"🎲 SGD using random ranking scores (no training data yet)")
+            # Before any training, use global centroid similarity for initial recommendations
+            # This gives much better cold start than random scores
+            global_centroid = np.mean(self.items_matrix, axis=0)
+            global_centroid = global_centroid / np.linalg.norm(global_centroid)
+            
+            # Compute cosine similarities to global centroid
+            scores = self.items_matrix[candidates] @ global_centroid
+            logger.debug(f"🎯 SGD using global centroid similarity scores (no training data yet)")
         else:
             scores = model.decision_function(X_cand)
             logger.debug(f"🎲 SGD raw decision scores: min={np.min(scores):.2f}, "
@@ -304,8 +308,9 @@ class SimpleSgdEngine:
             # Mark this group as seen in this batch
             seen_groups.add(group_key)
             
+            algorithm = "sgd_centroid_similarity" if not self.session_initialized[session_id] else "sgd_raw_score"
             recommendations.append(
-                self._format_recommendation(watch_id, score, "sgd_raw_score")
+                self._format_recommendation(watch_id, score, algorithm)
             )
             
             # Stop if we have enough recommendations
